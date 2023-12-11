@@ -10,7 +10,11 @@
     <ItemGroup>
       <PackageReference Include="Antlr4.Runtime.Standard" Version="4.13.1" />
     </ItemGroup>
-    
+
+    <Target Name="MyCustomTask" AfterTargets="Build">
+        <Exec Command="java -jar ../Tools/antlr-4.13.1-complete.jar -no-listener -visitor -Dlanguage=CSharp Beblang.g4" />
+    </Target>
+
     <ItemGroup>
       <Content Include="Resources\**">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
