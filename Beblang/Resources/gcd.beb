@@ -1,0 +1,25 @@
+MODULE Gcd;
+
+IMPORT System;
+
+VAR
+  res: INTEGER;
+
+PROCEDURE CalcGcd(a, b: INTEGER) : INTEGER
+VAR
+  tmp: INTEGER;
+BEGIN
+  WHILE b # 0
+  DO
+    tmp := b;
+    b := a MOD b;
+    a := tmp;
+  END;
+
+  RETURN a;
+END;
+
+BEGIN
+  res := CalcGcd(252, 105);
+  Console.WriteLine(res);
+END Gcd.

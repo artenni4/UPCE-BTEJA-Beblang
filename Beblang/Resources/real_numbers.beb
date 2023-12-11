@@ -1,0 +1,22 @@
+MODULE RealNumbers;
+
+IMPORT System;
+
+VAR
+  num1, num2: REAL;
+  sum, difference, product, quotient: REAL;
+BEGIN
+  num1 := 5.5;
+  num2 := 2.2;
+  
+  sum := num1 + num2;
+  difference := num1 - num2;
+  product := num1 * num2;
+  quotient := num1 / num2;
+  
+  Consoler.WriteLine("Sum: " + RealToString(sum));
+  Consoler.WriteLine("Difference: " + RealToString(difference));
+  Consoler.WriteLine("Product: " + RealToString(product));
+  Consoler.WriteLine("Quotient: " + RealToString(quotient));
+  
+END RealNumbers.
