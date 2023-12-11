@@ -11,4 +11,4 @@ BEGIN
 
   concatStr := str1 + str2;
   Console.WriteLine(concatStr);
-END Strings.
+END.

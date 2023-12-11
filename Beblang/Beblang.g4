@@ -28,7 +28,7 @@ PROCEDURE: 'PROCEDURE';
 INTEGER_LITERAL: [0-9]+;
 IDENTIFIER: [a-zA-Z_] [a-zA-Z_0-9]*;
 REAL_LITERAL: [0-9]+ '.' [0-9]+;
-STRING_LITERAL: '"' .*? '"';
+STRING_LITERAL: '"' ( ~["\\] | '\\' . )* '"';
 WS: [ \t\r\n]+ -> skip;
 COMMENT: '(*' .*? '*)' -> skip;
 
@@ -40,38 +40,45 @@ moduleStatements: moduleImport* (variableDeclarationBlock)? subprogram* moduleBo
 
 moduleImport: IMPORT qualifiedIdentifier ';' ;
 
-subprogram: subprogramDeclaration (variableDeclarationBlock)? subprogramBody ';' ;
-subprogramDeclaration: PROCEDURE IDENTIFIER '(' (variableDeclaration (';' variableDeclaration)*)? ')' (':' type)?;
+subprogram: subprogramDeclaration variableDeclarationBlock? subprogramBody ';' ;
+subprogramDeclaration: PROCEDURE IDENTIFIER '(' paramList? ')' (':' type)?;
 
+paramList: variableDeclaration (',' variableDeclaration)*;
 variableDeclaration: IDENTIFIER (',' IDENTIFIER)* ':' type ;
-variableDeclarationBlock: VAR (variableDeclaration ';')* ;
+variableDeclarationBlock: VAR variableDeclaration (';' variableDeclaration)* ';' ;
 
-subprogramBody: BEGIN statement* END ;
+subprogramBody: BEGIN statement* END;
 
-statement: assignment ';' 
-          | returnStatement ';' 
-          | exitStatement ';' 
-          | ifStatement ';'
-          | whileStatement ';'
-          | subprogramCall ';';
+statement: ( assignment
+           | returnStatement
+           | exitStatement
+           | ifStatement
+           | whileStatement
+           | subprogramCall
+           ) ';';
 
-assignment: designator ':=' expression ;
-subprogramCall: designator '(' (expression (',' expression)*)? ')' ;
-returnStatement: RETURN (expression)?;
+assignment: designator ':=' expression;
+subprogramCall: designator '(' expressionList? ')' ;
+expressionList: expression (',' expression)* ;
+returnStatement: RETURN expression?;
 exitStatement: EXIT;
 
-ifStatement: IF expression THEN statement* (elseIfStatement)* (elseStatement)? END;
+ifStatement: IF expression THEN statement* elseIfStatement* elseStatement? END;
 elseIfStatement: ELSIF expression THEN statement*;
 elseStatement: ELSE statement*;
 
 whileStatement: WHILE expression DO statement* END;
 
-expression: simpleExpression (('=' | '#' | '<' | '<=' | '>' | '>=') simpleExpression)?;
-simpleExpression: ('+' | '-')? term (('+' | '-' | OR) term)*;
-term: factor (('/' | '*' | MOD | '&') factor)*;
+expression: simpleExpression (comparisonOp simpleExpression)?;
+comparisonOp: '=' | '#' | '<' | '<=' | '>' | '>=';
+simpleExpression: unaryOp? term (binaryOp term)*;
+unaryOp: '+' | '-';
+binaryOp: '+' | '-' | OR;
+term: factor (termOp factor)*;
+termOp: '/' | '*' | MOD | '&';
 factor: '~' factor | '(' expression ')' | subprogramCall | designator | literal;
 
-designator: IDENTIFIER (selector)*;
+designator: IDENTIFIER selector*;
 selector: '[' expression ']' | '.' IDENTIFIER;
 qualifiedIdentifier: IDENTIFIER ('.' IDENTIFIER)*;
 
