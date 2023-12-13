@@ -21,4 +21,4 @@ END;
 BEGIN
   res := CalcFactorial(10);
   Console.WriteLine(res);
-END Factorial.
+END.

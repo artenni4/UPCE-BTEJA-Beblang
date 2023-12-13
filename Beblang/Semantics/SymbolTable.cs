@@ -1,46 +1,50 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Beblang.Semantics;
 
 public class SymbolTable
 {
-    public void DefineModule(string name)
+    private readonly Stack<Dictionary<string, ISymbolInfo>> _scopes = new();
+
+    public SymbolTable()
     {
-        
-    }
-    
-    public void DefineVariable(string name, DataType type)
-    {
-        
+        EnterScope();
     }
 
-    public void DefineProcedure(string name)
+    public void Define(ISymbolInfo symbolInfo)
     {
+        Debug.WriteLine($"Defining {symbolInfo.Name}, at scope {_scopes.Count}");
+        var currentScope = _scopes.Peek();
+        if (currentScope.TryGetValue(symbolInfo.Name, out var existingSymbolInfo))
+        {
+            throw new SemanticException(existingSymbolInfo.Context, $"Symbol {symbolInfo.Name} at line {symbolInfo.Context.Start.Line} is already defined");
+        }
         
+        currentScope[symbolInfo.Name] = symbolInfo;
+    }
+    
+    public bool IsDefined(string name, [NotNullWhen(true)] out ISymbolInfo? symbolInfo)
+    {
+        foreach (var scope in _scopes)
+        {
+            if (scope.TryGetValue(name, out symbolInfo))
+            {
+                return true;
+            }
+        }
+
+        symbolInfo = null;
+        return false;
     }
 
     public void EnterScope()
     {
-        
+        _scopes.Push(new Dictionary<string, ISymbolInfo>());
     }
 
     public void ExitScope()
     {
-        
-    }
-    
-    public bool IsDefinedModule(string name)
-    {
-        
-    }
-    
-    public bool IsDefinedVariable(string name, [NotNullWhen(true)] DataType? dataType)
-    {
-        
-    }
-
-    public bool IsDefinedProcedure(string name)
-    {
-        
+        _scopes.Pop();
     }
 }

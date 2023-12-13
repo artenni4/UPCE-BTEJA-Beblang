@@ -1,6 +1,8 @@
-﻿using Antlr4.Runtime;
-using Beblang;
+﻿using System.Diagnostics;
+using Antlr4.Runtime;
 using Beblang.Semantics;
+
+Trace.Listeners.Add(new ConsoleTraceListener());
 
 Console.WriteLine("Running compiler");
 

@@ -76,7 +76,11 @@ unaryOp: '+' | '-';
 binaryOp: '+' | '-' | OR;
 term: factor (termOp factor)*;
 termOp: '/' | '*' | MOD | '&';
-factor: '~' factor | '(' expression ')' | subprogramCall | designator | literal;
+factor: '~' factor 
+       | '(' expression ')' 
+       | subprogramCall 
+       | designator 
+       | literal;
 
 designator: IDENTIFIER selector*;
 selector: '[' expression ']' | '.' IDENTIFIER;

@@ -2,8 +2,9 @@ MODULE Test;
 
 VAR a, b: INTEGER;
     c, d, e: STRING;
+    f: ARRAY 10 OF REAL;
 
-PROCEDURE CalcGcd(a, b: INTEGER) : INTEGER
+PROCEDURE CalcGcd(p_a, p_b: INTEGER, p_a, p_b2: REAL) : INTEGER
 VAR
   tmp: INTEGER;
 BEGIN

@@ -68,6 +68,12 @@ public interface IBeblangVisitor<Result> : IParseTreeVisitor<Result> {
 	/// <return>The visitor result.</return>
 	Result VisitSubprogramDeclaration([NotNull] BeblangParser.SubprogramDeclarationContext context);
 	/// <summary>
+	/// Visit a parse tree produced by <see cref="BeblangParser.paramList"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitParamList([NotNull] BeblangParser.ParamListContext context);
+	/// <summary>
 	/// Visit a parse tree produced by <see cref="BeblangParser.variableDeclaration"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
@@ -103,6 +109,12 @@ public interface IBeblangVisitor<Result> : IParseTreeVisitor<Result> {
 	/// <param name="context">The parse tree.</param>
 	/// <return>The visitor result.</return>
 	Result VisitSubprogramCall([NotNull] BeblangParser.SubprogramCallContext context);
+	/// <summary>
+	/// Visit a parse tree produced by <see cref="BeblangParser.expressionList"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitExpressionList([NotNull] BeblangParser.ExpressionListContext context);
 	/// <summary>
 	/// Visit a parse tree produced by <see cref="BeblangParser.returnStatement"/>.
 	/// </summary>
@@ -146,17 +158,41 @@ public interface IBeblangVisitor<Result> : IParseTreeVisitor<Result> {
 	/// <return>The visitor result.</return>
 	Result VisitExpression([NotNull] BeblangParser.ExpressionContext context);
 	/// <summary>
+	/// Visit a parse tree produced by <see cref="BeblangParser.comparisonOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitComparisonOp([NotNull] BeblangParser.ComparisonOpContext context);
+	/// <summary>
 	/// Visit a parse tree produced by <see cref="BeblangParser.simpleExpression"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
 	/// <return>The visitor result.</return>
 	Result VisitSimpleExpression([NotNull] BeblangParser.SimpleExpressionContext context);
 	/// <summary>
+	/// Visit a parse tree produced by <see cref="BeblangParser.unaryOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitUnaryOp([NotNull] BeblangParser.UnaryOpContext context);
+	/// <summary>
+	/// Visit a parse tree produced by <see cref="BeblangParser.binaryOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitBinaryOp([NotNull] BeblangParser.BinaryOpContext context);
+	/// <summary>
 	/// Visit a parse tree produced by <see cref="BeblangParser.term"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
 	/// <return>The visitor result.</return>
 	Result VisitTerm([NotNull] BeblangParser.TermContext context);
+	/// <summary>
+	/// Visit a parse tree produced by <see cref="BeblangParser.termOp"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitTermOp([NotNull] BeblangParser.TermOpContext context);
 	/// <summary>
 	/// Visit a parse tree produced by <see cref="BeblangParser.factor"/>.
 	/// </summary>
