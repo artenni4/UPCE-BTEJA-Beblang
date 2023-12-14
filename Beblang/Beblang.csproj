@@ -5,16 +5,12 @@
         <TargetFramework>net7.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <WarningsAsErrors>CS8603</WarningsAsErrors>
+        <WarningsAsErrors>CS8603,CS8604,CS8625</WarningsAsErrors>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="Antlr4.Runtime.Standard" Version="4.13.1" />
     </ItemGroup>
-
-    <Target Name="MyCustomTask" BeforeTargets="Build">
-        <Exec Command="java -jar ../Tools/antlr-4.13.1-complete.jar -no-listener -visitor -Dlanguage=CSharp Beblang.g4" />
-    </Target>
 
     <ItemGroup>
         <Content Include="Resources\**">
@@ -22,4 +18,11 @@
         </Content>
     </ItemGroup>
 
+    <ItemGroup>
+      <None Remove=".gitignore" />
+    </ItemGroup>
+
+    <Target Name="BeforeBuild" BeforeTargets="Build">
+        <Exec Command="java -jar ../Tools/antlr-4.13.1-complete.jar -no-listener -visitor -Dlanguage=CSharp Beblang.g4" />
+    </Target>
 </Project>

@@ -39,7 +39,7 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<object?>
     public override object VisitSubprogramDeclaration(BeblangParser.SubprogramDeclarationContext context)
     {
         var subprogramName = context.IDENTIFIER().GetText();
-        var returnType = context.type()?.GetDataType();
+        var returnType = context.type()?.GetDataType() ?? DataType.Void;
         var parameters = context.paramList().variableDeclaration()
             .SelectMany(vdc => vdc.GetVariableSymbolInfo())
             .ToArray();
@@ -237,7 +237,7 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<object?>
             }
         }
 
-        return subprogramInfo.ReturnType ?? DataType.Void;
+        return subprogramInfo.ReturnType;
     }
 
     public override object VisitLiteral(BeblangParser.LiteralContext context)
