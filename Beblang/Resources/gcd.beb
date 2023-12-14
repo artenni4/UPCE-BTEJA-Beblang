@@ -1,7 +1,5 @@
 MODULE Gcd;
 
-IMPORT System;
-
 VAR
   res: INTEGER;
 

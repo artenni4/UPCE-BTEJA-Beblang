@@ -22,7 +22,7 @@
       <None Remove=".gitignore" />
     </ItemGroup>
 
-    <Target Name="BeforeBuild" BeforeTargets="Build">
-        <Exec Command="java -jar ../Tools/antlr-4.13.1-complete.jar -no-listener -visitor -Dlanguage=CSharp Beblang.g4" />
+    <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+      <Exec Command="java -jar ../Tools/antlr-4.13.1-complete.jar -no-listener -visitor -Dlanguage=CSharp Beblang.g4" />
     </Target>
 </Project>

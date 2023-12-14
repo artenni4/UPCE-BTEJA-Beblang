@@ -1,7 +1,5 @@
 MODULE Factorial;
 
-IMPORT System;
-
 VAR
   res: INTEGER;
 

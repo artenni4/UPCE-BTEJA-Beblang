@@ -1,7 +1,5 @@
 MODULE RealNumbers;
 
-IMPORT System;
-
 VAR
   num1, num2: REAL;
   sum, difference, product, quotient: REAL;

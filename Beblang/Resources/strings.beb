@@ -1,7 +1,5 @@
 MODULE Strings;
 
-IMPORT System;
-
 VAR
   str1, str2, concatStr: STRING;
 
