@@ -5,6 +5,8 @@ VAR a, b: INTEGER;
     f: ARRAY 10 OF ARRAY 10 OF REAL;
     g: ARRAY 10 OF INTEGER;
 
+PROCEDURE RetArray() : ARRAY 10 OF INTEGER;
+
 PROCEDURE CalcGcd(p_a, p_b: INTEGER, p_a1, p_b2: REAL) : INTEGER
 VAR
   tmp: INTEGER;
@@ -15,7 +17,9 @@ BEGIN
     b := a MOD b;
     a := tmp;
   END;
-
+  
+  RetArray();
+  
   RETURN a;
 END;
 

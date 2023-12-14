@@ -2,6 +2,19 @@
 
 public static class SemanticContextExtensions
 {
+    public static SubprogramInfo GetSubprogramInfo(this BeblangParser.SubprogramHeadingContext context)
+    {
+        var subprogramName = context.IDENTIFIER().GetText();
+        var returnType = context.type()?.GetDataType() ?? DataType.Void;
+        var parameters = context.paramList()?.variableDeclaration()
+            .SelectMany(vdc => vdc.GetVariableSymbolInfo())
+            .ToArray() ?? Array.Empty<VariableInfo>();
+        
+        var subprogramInfo = new SubprogramInfo(subprogramName, context, parameters, returnType);
+
+        return subprogramInfo;
+    }
+    
     public static VariableInfo[] GetVariableSymbolInfo(this BeblangParser.VariableDeclarationContext context)
     {
         var dataType = context.type().GetDataType();

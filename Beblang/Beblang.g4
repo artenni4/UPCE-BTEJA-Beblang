@@ -36,12 +36,14 @@ COMMENT: '(*' .*? '*)' -> skip;
 start: module EOF;
 
 module: MODULE moduleName=qualifiedIdentifier ';' moduleStatements '.' ;
-moduleStatements: moduleImport* (variableDeclarationBlock)? subprogram* moduleBody=subprogramBody ;
+moduleStatements: moduleImport* variableDeclarationBlock? (subprogram | subprogramDeclaration)* moduleBody=subprogramBody ;
 
 moduleImport: IMPORT qualifiedIdentifier ';' ;
 
-subprogram: subprogramDeclaration variableDeclarationBlock? subprogramBody ';' ;
-subprogramDeclaration: PROCEDURE IDENTIFIER '(' paramList? ')' (':' type)?;
+subprogramDeclaration: subprogramHeading ';' ;
+subprogram: subprogramHeading variableDeclarationBlock? subprogramBody ';' ;
+subprogramHeading: PROCEDURE IDENTIFIER '(' paramList? ')' (':' type)?;
+
 
 paramList: variableDeclaration (',' variableDeclaration)*;
 variableDeclaration: IDENTIFIER (',' IDENTIFIER)* ':' type ;

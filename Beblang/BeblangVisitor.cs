@@ -56,17 +56,23 @@ public interface IBeblangVisitor<Result> : IParseTreeVisitor<Result> {
 	/// <return>The visitor result.</return>
 	Result VisitModuleImport([NotNull] BeblangParser.ModuleImportContext context);
 	/// <summary>
+	/// Visit a parse tree produced by <see cref="BeblangParser.subprogramDeclaration"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitSubprogramDeclaration([NotNull] BeblangParser.SubprogramDeclarationContext context);
+	/// <summary>
 	/// Visit a parse tree produced by <see cref="BeblangParser.subprogram"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
 	/// <return>The visitor result.</return>
 	Result VisitSubprogram([NotNull] BeblangParser.SubprogramContext context);
 	/// <summary>
-	/// Visit a parse tree produced by <see cref="BeblangParser.subprogramDeclaration"/>.
+	/// Visit a parse tree produced by <see cref="BeblangParser.subprogramHeading"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
 	/// <return>The visitor result.</return>
-	Result VisitSubprogramDeclaration([NotNull] BeblangParser.SubprogramDeclarationContext context);
+	Result VisitSubprogramHeading([NotNull] BeblangParser.SubprogramHeadingContext context);
 	/// <summary>
 	/// Visit a parse tree produced by <see cref="BeblangParser.paramList"/>.
 	/// </summary>
