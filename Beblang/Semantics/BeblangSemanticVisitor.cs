@@ -2,7 +2,12 @@
 
 public class BeblangSemanticVisitor : BeblangBaseVisitor<object?>
 {
-    private readonly SymbolTable _symbolTable = new();
+    private readonly SymbolTable _symbolTable;
+
+    public BeblangSemanticVisitor(SymbolTable symbolTable)
+    {
+        _symbolTable = symbolTable;
+    }
 
     public override object? VisitModule(BeblangParser.ModuleContext context)
     {
@@ -84,7 +89,27 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<object?>
             throw new SemanticException(context, $"Symbol {name} is not a variable");
         }
         
-        return variableInfo.DataType;
+        var variableType = variableInfo.DataType;
+        if (context.selector().Any())
+        {
+            if (variableType.IsArray(out var ofType))
+            {
+                throw new SemanticException(context, $"Symbol {name} is not an array");
+            }
+
+            foreach (var selector in context.selector())
+            {
+                var selectorType = (DataType)selector.Accept(this)!;
+                if (selectorType != DataType.Integer)
+                {
+                    throw new SemanticException(context, $"Selector {selector.GetText()} is not an integer");
+                }
+            }
+            
+            variableType = ofType;
+        }
+        
+        return variableType;
     }
 
     public override object? VisitExpression(BeblangParser.ExpressionContext context)
