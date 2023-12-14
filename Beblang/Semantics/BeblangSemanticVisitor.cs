@@ -44,9 +44,9 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<object?>
     {
         var subprogramName = context.IDENTIFIER().GetText();
         var returnType = context.type()?.GetDataType() ?? DataType.Void;
-        var parameters = context.paramList().variableDeclaration()
+        var parameters = context.paramList()?.variableDeclaration()
             .SelectMany(vdc => vdc.GetVariableSymbolInfo())
-            .ToArray();
+            .ToArray() ?? Array.Empty<VariableInfo>();
         
         var subprogramInfo = new SubprogramInfo(subprogramName, context, parameters, returnType);
         _symbolTable.Define(subprogramInfo);
@@ -275,9 +275,9 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<object?>
             throw new SemanticException(context, $"Symbol {name} is not a subprogram");
         }
 
-        var arguments = context.expressionList().expression()
+        var arguments = context.expressionList()?.expression()
             .Select(e => (DataType)e.Accept(this)!)
-            .ToArray();
+            .ToArray() ?? Array.Empty<DataType>();
 
         if (arguments.Length != subprogramInfo.Parameters.Count)
         {
