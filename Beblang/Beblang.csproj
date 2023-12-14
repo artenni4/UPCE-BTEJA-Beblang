@@ -5,23 +5,21 @@
         <TargetFramework>net7.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <WarningsAsErrors>CS8603</WarningsAsErrors>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="Antlr4.Runtime.Standard" Version="4.13.1" />
     </ItemGroup>
 
-    <Target Name="MyCustomTask" AfterTargets="Build">
+    <Target Name="MyCustomTask" BeforeTargets="Build">
         <Exec Command="java -jar ../Tools/antlr-4.13.1-complete.jar -no-listener -visitor -Dlanguage=CSharp Beblang.g4" />
     </Target>
 
     <ItemGroup>
-      <Content Include="Resources\**">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </Content>
-      <Content Update="Beblang.g4">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </Content>
+        <Content Include="Resources\**">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
     </ItemGroup>
 
 </Project>

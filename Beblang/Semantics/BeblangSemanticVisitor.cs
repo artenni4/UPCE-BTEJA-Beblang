@@ -92,7 +92,7 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<object?>
         var variableType = variableInfo.DataType;
         if (context.selector().Any())
         {
-            if (variableType.IsArray(out var ofType))
+            if (!variableType.IsArray(out var ofType))
             {
                 throw new SemanticException(context, $"Symbol {name} is not an array");
             }
@@ -205,5 +205,63 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<object?>
         }
 
         throw new NotSupportedException($"Factor {context.GetText()} is not supported");
+    }
+
+    public override object VisitSubprogramCall(BeblangParser.SubprogramCallContext context)
+    {
+        var name = context.designator().IDENTIFIER().GetText();
+        if (!_symbolTable.IsDefined(name, out var symbolInfo))
+        {
+            throw new SemanticException(context, $"Symbol {name} is not defined");
+        }
+
+        if (symbolInfo is not SubprogramInfo subprogramInfo)
+        {
+            throw new SemanticException(context, $"Symbol {name} is not a subprogram");
+        }
+
+        var arguments = context.expressionList().expression()
+            .Select(e => (DataType)e.Accept(this)!)
+            .ToArray();
+
+        if (arguments.Length != subprogramInfo.Parameters.Count)
+        {
+            throw new SemanticException(context, $"Subprogram {name} expects {subprogramInfo.Parameters.Count} arguments, but {arguments.Length} were provided");
+        }
+
+        for (var i = 0; i < arguments.Length; i++)
+        {
+            if (arguments[i] != subprogramInfo.Parameters[i].DataType)
+            {
+                throw new SemanticException(context, $"Subprogram {name} expects {subprogramInfo.Parameters[i].DataType} as argument {i + 1}, but {arguments[i]} was provided");
+            }
+        }
+
+        return subprogramInfo.ReturnType ?? DataType.Void;
+    }
+
+    public override object VisitLiteral(BeblangParser.LiteralContext context)
+    {
+        if (context.INTEGER_LITERAL() is not null)
+        {
+            return DataType.Integer;
+        }
+
+        if (context.REAL_LITERAL() is not null)
+        {
+            return DataType.Real;
+        }
+
+        if (context.STRING_LITERAL() is not null)
+        {
+            return DataType.String;
+        }
+
+        if (context.boolean() is not null)
+        {
+            return DataType.Boolean;
+        }
+
+        throw new NotSupportedException($"Literal {context.GetText()} is not supported");
     }
 }

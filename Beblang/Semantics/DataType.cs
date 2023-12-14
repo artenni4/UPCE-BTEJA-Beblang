@@ -10,7 +10,8 @@ public class DataType : IEquatable<DataType>
         Real,
         String,
         Boolean,
-        Array
+        Array,
+        Void,
     };
 
     private readonly IReadOnlyList<PrimitiveType> _type;
@@ -41,6 +42,7 @@ public class DataType : IEquatable<DataType>
     public static DataType Real { get; } = new(PrimitiveType.Real);
     public static DataType String { get; } = new(PrimitiveType.String);
     public static DataType Boolean { get; } = new(PrimitiveType.Boolean);
+    public static DataType Void { get; } = new(PrimitiveType.Void);
     public static DataType Array(DataType ofType)
     {
         if (ofType._type.Take(..^1).Any(t => t != PrimitiveType.Array))

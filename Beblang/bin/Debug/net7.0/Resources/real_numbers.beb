@@ -14,9 +14,9 @@ BEGIN
   product := num1 * num2;
   quotient := num1 / num2;
   
-  Consoler.WriteLine("Sum: " + RealToString(sum));
-  Consoler.WriteLine("Difference: " + RealToString(difference));
-  Consoler.WriteLine("Product: " + RealToString(product));
-  Consoler.WriteLine("Quotient: " + RealToString(quotient));
+  PrintLine("Sum: " + REAL_TO_STRING(sum));
+  PrintLine("Difference: " + REAL_TO_STRING(difference));
+  PrintLine("Product: " + REAL_TO_STRING(product));
+  PrintLine("Quotient: " + REAL_TO_STRING(quotient));
   
 END.
