@@ -2,7 +2,7 @@ MODULE Test;
 
 VAR a, b: INTEGER;
     c, d, e: STRING;
-    f: ARRAY 10 OF REAL;
+    f: ARRAY 10 OF ARRAY 10 OF REAL;
 
 PROCEDURE CalcGcd(p_a, p_b: INTEGER, p_a1, p_b2: REAL) : INTEGER
 VAR
@@ -20,4 +20,6 @@ END;
 
 BEGIN
   a := (1 + 2) * 3 + 4 / 5 - 6;
+  f[1][2] := 1.0;
+  f[2][3] := INTEGER_TO_REAL(a);
 END.

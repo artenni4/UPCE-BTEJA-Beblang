@@ -12,5 +12,8 @@ public static class BuiltInSymbols
         new SubprogramInfo("INTEGER_TO_STRING", Context: null, new []{ new VariableInfo("value", Context: null, DataType.Integer) }, ReturnType: DataType.String),
         new SubprogramInfo("REAL_TO_STRING", Context: null, new []{ new VariableInfo("value", Context: null, DataType.Real) }, ReturnType: DataType.String),
         new SubprogramInfo("BOOLEAN_TO_STRING", Context: null, new []{ new VariableInfo("value", Context: null, DataType.Boolean) }, ReturnType: DataType.String),
+        
+        new SubprogramInfo("INTEGER_TO_REAL", Context: null, new []{ new VariableInfo("value", Context: null, DataType.Integer) }, ReturnType: DataType.Real),
+        new SubprogramInfo("REAL_TO_INTEGER", Context: null, new []{ new VariableInfo("value", Context: null, DataType.Real) }, ReturnType: DataType.Integer),
     };
 }

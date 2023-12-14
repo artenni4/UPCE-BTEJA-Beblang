@@ -83,7 +83,7 @@ public class DataType : IEquatable<DataType>
     {
         if (ReferenceEquals(null, other)) return false;
         if (ReferenceEquals(this, other)) return true;
-        return _type.Equals(other._type);
+        return _type.SequenceEqual(other._type);
     }
 
     public override bool Equals(object? obj)

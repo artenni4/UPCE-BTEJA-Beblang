@@ -3,6 +3,8 @@
 public class BeblangSemanticVisitor : BeblangBaseVisitor<object?>
 {
     private readonly SymbolTable _symbolTable;
+    private SubprogramInfo? _currentSubprogram;
+    private bool _isInLoop;
 
     public BeblangSemanticVisitor(SymbolTable symbolTable)
     {
@@ -22,6 +24,7 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<object?>
     public override object? VisitSubprogram(BeblangParser.SubprogramContext context)
     {
         var subprogramInfo = (SubprogramInfo)context.subprogramDeclaration().Accept(this)!;
+        _currentSubprogram = subprogramInfo;
         _symbolTable.EnterScope();
         
         foreach (var parameter in subprogramInfo.Parameters)
@@ -32,7 +35,8 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<object?>
         context.subprogramBody().Accept(this);
         
         _symbolTable.ExitScope();
-
+        _currentSubprogram = null;
+        
         return null;
     }
     
@@ -59,6 +63,60 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<object?>
                 _symbolTable.Define(symbolInfo);
             }
         }
+
+        return null;
+    }
+
+    public override object? VisitIfStatement(BeblangParser.IfStatementContext context)
+    {
+        CheckConditionExpression(context.expression());
+        VisitChildren(context);
+        return null;
+    }
+
+    public override object? VisitElseIfStatement(BeblangParser.ElseIfStatementContext context)
+    {
+        CheckConditionExpression(context.expression());
+        VisitChildren(context);
+        return null;
+    }
+
+    public override object? VisitWhileStatement(BeblangParser.WhileStatementContext context)
+    {
+        CheckConditionExpression(context.expression());
+        _isInLoop = true;
+        VisitChildren(context);
+        _isInLoop = false;
+        return null;
+    }
+
+    private void CheckConditionExpression(BeblangParser.ExpressionContext context)
+    {
+        var expressionType = (DataType)context.Accept(this)!;
+        if (expressionType != DataType.Boolean)
+        {
+            throw new SemanticException(context, $"Cannot use {expressionType} as condition");
+        }
+    }
+
+    public override object? VisitReturnStatement(BeblangParser.ReturnStatementContext context)
+    {
+        var expressionDataType = (DataType)context.expression()?.Accept(this)!;
+        if (expressionDataType != _currentSubprogram!.ReturnType)
+        {
+            throw new SemanticException(context, $"Cannot return {expressionDataType} from {_currentSubprogram.Name}, expected {_currentSubprogram.ReturnType}");
+        }
+
+        return null;
+    }
+
+    public override object? VisitExitStatement(BeblangParser.ExitStatementContext context)
+    {
+        if (!_isInLoop)
+        {
+            throw new SemanticException(context, "Exit statement is not allowed outside of a loop");
+        }
+        VisitChildren(context);
 
         return null;
     }
@@ -90,25 +148,22 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<object?>
         }
         
         var variableType = variableInfo.DataType;
-        if (context.selector().Any())
+        foreach (var selector in context.selector())
         {
             if (!variableType.IsArray(out var ofType))
             {
                 throw new SemanticException(context, $"Symbol {name} is not an array");
             }
-
-            foreach (var selector in context.selector())
+            
+            var selectorType = (DataType)selector.expression().Accept(this)!;
+            if (selectorType != DataType.Integer)
             {
-                var selectorType = (DataType)selector.Accept(this)!;
-                if (selectorType != DataType.Integer)
-                {
-                    throw new SemanticException(context, $"Selector {selector.GetText()} is not an integer");
-                }
+                throw new SemanticException(context, $"Selector {selector.GetText()} is not an integer");
             }
             
             variableType = ofType;
         }
-        
+            
         return variableType;
     }
 
