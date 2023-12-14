@@ -18,7 +18,10 @@ public class SymbolTable
         var currentScope = _scopes.Peek();
         if (currentScope.TryGetValue(symbolInfo.Name, out var existingSymbolInfo))
         {
-            throw new SemanticException(existingSymbolInfo.Context, $"Symbol {symbolInfo.Name} at line {symbolInfo.Context.Start.Line} is already defined");
+            throw new SemanticException(existingSymbolInfo.Context,
+                symbolInfo.Context is null 
+                    ? $"Symbol {symbolInfo.Name} is already defined" 
+                    : $"Symbol {symbolInfo.Name} at line {symbolInfo.Context.Start.Line} is already defined");
         }
         
         currentScope[symbolInfo.Name] = symbolInfo;

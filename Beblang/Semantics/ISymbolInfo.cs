@@ -3,5 +3,5 @@
 public interface ISymbolInfo
 {
     string Name { get; }
-    ParserRuleContext Context { get; }
+    ParserRuleContext? Context { get; }
 }

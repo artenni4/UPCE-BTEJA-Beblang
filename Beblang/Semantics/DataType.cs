@@ -1,4 +1,6 @@
-﻿namespace Beblang.Semantics;
+﻿using System.Diagnostics.CodeAnalysis;
+
+namespace Beblang.Semantics;
 
 public class DataType : IEquatable<DataType>
 {
@@ -23,6 +25,18 @@ public class DataType : IEquatable<DataType>
         _type = type;
     }
 
+    public bool IsArray([NotNullWhen(true)] out DataType? ofType)
+    {
+        if (_type.Count == 1)
+        {
+            ofType = null;
+            return false;
+        }
+
+        ofType = new DataType(_type.Skip(1).ToArray());
+        return true;
+    }
+    
     public static DataType Integer { get; } = new(PrimitiveType.Integer);
     public static DataType Real { get; } = new(PrimitiveType.Real);
     public static DataType String { get; } = new(PrimitiveType.String);

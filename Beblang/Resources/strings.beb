@@ -10,5 +10,5 @@ BEGIN
   str2 := "World";
 
   concatStr := str1 + str2;
-  Console.WriteLine(concatStr);
+  PrintLine(concatStr);
 END.

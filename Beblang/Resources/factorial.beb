@@ -15,10 +15,10 @@ BEGIN
     RETURN 1;
   END;
 
-  RETURN n * Factorial(n - 1);
+  RETURN n * CalcFactorial(n - 1);
 END;
 
 BEGIN
   res := CalcFactorial(10);
-  Console.WriteLine(res);
+  PrintLine(INTEGER_TO_STRING(res));
 END.
