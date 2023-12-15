@@ -58,14 +58,14 @@ public class DataType : IEquatable<DataType>
         {
             { Count: 1 } => _type[0] switch
             {
-                PrimitiveType.Integer => "integer",
-                PrimitiveType.Real => "real",
-                PrimitiveType.String => "string",
-                PrimitiveType.Boolean => "boolean",
+                PrimitiveType.Integer => "INTEGER",
+                PrimitiveType.Real => "REAL",
+                PrimitiveType.String => "STRING",
+                PrimitiveType.Boolean => "BOOLEAN",
                 PrimitiveType.Array => throw new InvalidOperationException("Array must have at least one type"),
                 _ => throw new NotSupportedException()
             },
-            _ => $"array of {new DataType(_type.Skip(1).ToArray())}"
+            _ => $"ARRAY OF {new DataType(_type.Skip(1).ToArray())}"
         };
     }
 

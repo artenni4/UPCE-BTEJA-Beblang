@@ -1,7 +1,9 @@
 ﻿namespace Beblang.Semantics;
 
-public class BeblangSemanticVisitor : BeblangBaseVisitor<DataType?>
+public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, SemanticError>?>
 {
+    private readonly List<SemanticError> _errors = new();
+    public IReadOnlyList<SemanticError> Errors => _errors;
     private readonly SymbolTable _symbolTable;
     private SubprogramInfo? _currentSubprogram;
     private bool _isInLoop;
@@ -11,17 +13,33 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<DataType?>
         _symbolTable = symbolTable;
     }
 
-    public override DataType? VisitModule(BeblangParser.ModuleContext context)
+    private SemanticError AddError(ParserRuleContext context, string message)
+    {
+        var error = new SemanticError(context, message);
+        _errors.Add(error);
+        return error;
+    }
+    
+    private SemanticError AddError(SemanticError error)
+    {
+        _errors.Add(error);
+        return error;
+    }
+
+    public override Result<DataType, SemanticError>? VisitModule(BeblangParser.ModuleContext context)
     {
         var moduleName = context.moduleName.GetFullName();
-        _symbolTable.Define(new ModuleInfo(moduleName, context));
+        if (!_symbolTable.TryDefine(new ModuleInfo(moduleName, context), out var error))
+        {
+            return AddError(error);
+        }
 
         context.moduleStatements().Accept(this);
         
         return null;
     }
 
-    public override DataType? VisitSubprogram(BeblangParser.SubprogramContext context)
+    public override Result<DataType, SemanticError>? VisitSubprogram(BeblangParser.SubprogramContext context)
     {
         var subprogramInfo = context.subprogramHeading().GetSubprogramInfo();
         if (_symbolTable.IsDefined(subprogramInfo.Name, out var existingSymbolInfo) &&
@@ -29,13 +47,16 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<DataType?>
         {
             if (existingSubprogramInfo.IsDefined)
             {
-                throw new SemanticException(context, $"Subprogram {subprogramInfo.Name} is already defined");
+                AddError(context, $"Subprogram {subprogramInfo.Name} is already defined");
             }
             existingSubprogramInfo.SetDefined();
         }
         else
         {
-            _symbolTable.Define(subprogramInfo);
+            if (!_symbolTable.TryDefine(subprogramInfo, out var error))
+            {
+                return AddError(error);
+            }
         }
         
         _currentSubprogram = subprogramInfo;
@@ -43,7 +64,10 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<DataType?>
         
         foreach (var parameter in subprogramInfo.Parameters)
         {
-            _symbolTable.Define(parameter);
+            if (!_symbolTable.TryDefine(parameter, out var error))
+            {
+                return AddError(error);
+            }
         }
         context.variableDeclarationBlock()?.Accept(this);
         context.subprogramBody().Accept(this);
@@ -54,42 +78,48 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<DataType?>
         return null;
     }
 
-    public override DataType? VisitSubprogramDeclaration(BeblangParser.SubprogramDeclarationContext context)
+    public override Result<DataType, SemanticError>? VisitSubprogramDeclaration(BeblangParser.SubprogramDeclarationContext context)
     {
         var subprogramInfo = context.subprogramHeading().GetSubprogramInfo();
-        _symbolTable.Define(subprogramInfo);
+        if (!_symbolTable.TryDefine(subprogramInfo, out var error))
+        {
+            return AddError(error);
+        }
 
         return null;
     }
 
-    public override DataType? VisitVariableDeclarationBlock(BeblangParser.VariableDeclarationBlockContext context)
+    public override Result<DataType, SemanticError>? VisitVariableDeclarationBlock(BeblangParser.VariableDeclarationBlockContext context)
     {
         foreach (var variableDeclarationContext in context.variableDeclaration())
         {
             foreach (var symbolInfo in variableDeclarationContext.GetVariableSymbolInfo())
             {
-                _symbolTable.Define(symbolInfo);
+                if (!_symbolTable.TryDefine(symbolInfo, out var error))
+                {
+                    return AddError(error);
+                }
             }
         }
 
         return null;
     }
 
-    public override DataType? VisitIfStatement(BeblangParser.IfStatementContext context)
+    public override Result<DataType, SemanticError>? VisitIfStatement(BeblangParser.IfStatementContext context)
     {
         CheckConditionExpression(context.expression());
         VisitChildren(context);
         return null;
     }
 
-    public override DataType? VisitElseIfStatement(BeblangParser.ElseIfStatementContext context)
+    public override Result<DataType, SemanticError>? VisitElseIfStatement(BeblangParser.ElseIfStatementContext context)
     {
         CheckConditionExpression(context.expression());
         VisitChildren(context);
         return null;
     }
 
-    public override DataType? VisitWhileStatement(BeblangParser.WhileStatementContext context)
+    public override Result<DataType, SemanticError>? VisitWhileStatement(BeblangParser.WhileStatementContext context)
     {
         CheckConditionExpression(context.expression());
         _isInLoop = true;
@@ -100,59 +130,61 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<DataType?>
 
     private void CheckConditionExpression(BeblangParser.ExpressionContext context)
     {
-        var expressionType = context.Accept(this)!;
-        if (expressionType != DataType.Boolean)
+        var result = context.Accept(this)!;
+        if (result.IsOk(out var expressionType) && expressionType != DataType.Boolean)
         {
-            throw new SemanticException(context, $"Cannot use {expressionType} as condition");
+            AddError(context, $"Cannot use {expressionType} as condition");
         }
     }
 
-    public override DataType? VisitReturnStatement(BeblangParser.ReturnStatementContext context)
+    public override Result<DataType, SemanticError>? VisitReturnStatement(BeblangParser.ReturnStatementContext context)
     {
-        var expressionDataType = context.expression()?.Accept(this)!;
-        if (expressionDataType != _currentSubprogram!.ReturnType)
+        var result = context.expression()?.Accept(this)!;
+        if (result.IsOk(out var expressionDataType) && expressionDataType != _currentSubprogram!.ReturnType)
         {
-            throw new SemanticException(context, $"Cannot return {expressionDataType} from {_currentSubprogram.Name}, expected {_currentSubprogram.ReturnType}");
+            AddError(context, $"Cannot return {expressionDataType} from {_currentSubprogram.Name}, expected {_currentSubprogram.ReturnType}");
         }
 
         return null;
     }
 
-    public override DataType? VisitExitStatement(BeblangParser.ExitStatementContext context)
+    public override Result<DataType, SemanticError>? VisitExitStatement(BeblangParser.ExitStatementContext context)
     {
         if (!_isInLoop)
         {
-            throw new SemanticException(context, "Exit statement is not allowed outside of a loop");
+            AddError(context, "Exit statement is not allowed outside of a loop");
         }
         VisitChildren(context);
 
         return null;
     }
 
-    public override DataType? VisitAssignment(BeblangParser.AssignmentContext context)
+    public override Result<DataType, SemanticError>? VisitAssignment(BeblangParser.AssignmentContext context)
     {
-        var designatorType = context.designator().Accept(this)!;
-        var expressionType = context.expression().Accept(this)!;
+        var designatorTypeResult = context.designator().Accept(this)!;
+        var expressionTypeResult = context.expression().Accept(this)!;
         
-        if (designatorType != expressionType)
+        if (designatorTypeResult.IsOk(out var designatorType) &&
+            expressionTypeResult.IsOk(out var expressionType) &&
+            designatorType != expressionType)
         {
-            throw new SemanticException(context, $"Cannot assign {expressionType} to {designatorType}");
+            AddError(context, $"Cannot assign {expressionType} to {designatorType}");
         }
         
         return null;
     }
 
-    public override DataType VisitDesignator(BeblangParser.DesignatorContext context)
+    public override Result<DataType, SemanticError> VisitDesignator(BeblangParser.DesignatorContext context)
     {
         var name = context.IDENTIFIER().GetText();
         if (!_symbolTable.IsDefined(name, out var symbolInfo))
         {
-            throw new SemanticException(context, $"Symbol {name} is not defined");
+            return AddError(context, $"Symbol {name} is not defined");
         }
 
         if (symbolInfo is not VariableInfo variableInfo)
         {
-            throw new SemanticException(context, $"Symbol {name} is not a variable");
+            return AddError(context, $"Symbol {name} is not a variable");
         }
         
         var variableType = variableInfo.DataType;
@@ -160,13 +192,13 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<DataType?>
         {
             if (!variableType.IsArray(out var ofType))
             {
-                throw new SemanticException(context, $"Symbol {name} is not an array");
+                return AddError(context, $"Symbol {name} is not an array");
             }
             
-            var selectorType = selector.expression().Accept(this)!;
-            if (selectorType != DataType.Integer)
+            var result = selector.expression().Accept(this)!;
+            if (result.IsOk(out var selectorType) && selectorType != DataType.Integer)
             {
-                throw new SemanticException(context, $"Selector {selector.GetText()} is not an integer");
+                AddError(context, $"Selector {selector.GetText()} is not an integer");
             }
             
             variableType = ofType;
@@ -175,25 +207,27 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<DataType?>
         return variableType;
     }
 
-    public override DataType? VisitExpression(BeblangParser.ExpressionContext context)
+    public override Result<DataType, SemanticError>? VisitExpression(BeblangParser.ExpressionContext context)
     {
         if (context.simpleExpression().Length == 1)
         {
             return context.simpleExpression(0).Accept(this);
         }
 
-        var leftType = context.simpleExpression(0).Accept(this)!;
-        var rightType = context.simpleExpression(1).Accept(this)!;
+        var leftTypeResult = context.simpleExpression(0).Accept(this)!;
+        var rightTypeResult = context.simpleExpression(1).Accept(this)!;
 
-        if (leftType != rightType)
+        if (leftTypeResult.IsOk(out var leftType) &&
+            rightTypeResult.IsOk(out var rightType) &&
+            leftType != rightType)
         {
-            throw new SemanticException(context, $"Cannot compare {leftType} with {rightType}");
+            AddError(context, $"Cannot compare {leftType} with {rightType}");
         }
 
         return DataType.Boolean;
     }
 
-    public override DataType? VisitSimpleExpression(BeblangParser.SimpleExpressionContext context)
+    public override Result<DataType, SemanticError>? VisitSimpleExpression(BeblangParser.SimpleExpressionContext context)
     {
         if (context.term().Length == 1)
         {
@@ -202,24 +236,28 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<DataType?>
 
         for (var i = 1; i < context.term().Length; i++)
         {
-            var leftType = context.term(i - 1).Accept(this)!;
-            var rightType = context.term(i).Accept(this)!;
+            var leftTypeResult = context.term(i - 1).Accept(this)!;
+            var rightTypeResult = context.term(i).Accept(this)!;
 
-            if (context.unaryOp() is not null && leftType != DataType.Integer)
+            if (leftTypeResult.IsOk(out var leftType))
             {
-                throw new SemanticException(context, $"Cannot perform unary operation ({context.unaryOp().GetText()}) on {leftType}");
-            }
+                if (context.unaryOp() is not null &&
+                    leftType != DataType.Integer)
+                {
+                    AddError(context, $"Cannot perform unary operation ({context.unaryOp().GetText()}) on {leftType}");
+                }
 
-            if (leftType != rightType)
-            {
-                throw new SemanticException(context, $"Cannot perform binary operation ({context.binaryOp(i - 1).GetText()}) on {leftType} and {rightType}");
+                if (rightTypeResult.IsOk(out var rightType) && leftType != rightType)
+                {
+                    _errors.Add(new SemanticError(context, $"Cannot perform binary operation ({context.binaryOp(i - 1).GetText()}) on {leftType} and {rightType}"));
+                }
             }
         }
 
         return context.term(0).Accept(this)!;
     }
 
-    public override DataType? VisitTerm(BeblangParser.TermContext context)
+    public override Result<DataType, SemanticError>? VisitTerm(BeblangParser.TermContext context)
     {
         if (context.factor().Length == 1)
         {
@@ -233,14 +271,14 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<DataType?>
 
             if (leftType != rightType)
             {
-                throw new SemanticException(context, $"Cannot perform binary operation ({context.termOp(i - 1).GetText()}) on {leftType} and {rightType}");
+                AddError(context, $"Cannot perform binary operation ({context.termOp(i - 1).GetText()}) on {leftType} and {rightType}");
             }
         }
 
         return context.factor(0).Accept(this)!;
     }
 
-    public override DataType? VisitFactor(BeblangParser.FactorContext context)
+    public override Result<DataType, SemanticError>? VisitFactor(BeblangParser.FactorContext context)
     {
         if (context.factor() is not null)
         {
@@ -270,40 +308,40 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<DataType?>
         throw new NotSupportedException($"Factor {context.GetText()} is not supported");
     }
 
-    public override DataType VisitSubprogramCall(BeblangParser.SubprogramCallContext context)
+    public override Result<DataType, SemanticError> VisitSubprogramCall(BeblangParser.SubprogramCallContext context)
     {
         var name = context.designator().IDENTIFIER().GetText();
         if (!_symbolTable.IsDefined(name, out var symbolInfo))
         {
-            throw new SemanticException(context, $"Symbol {name} is not defined");
+            return new SemanticError(context, $"Symbol {name} is not defined");
         }
 
         if (symbolInfo is not SubprogramInfo subprogramInfo)
         {
-            throw new SemanticException(context, $"Symbol {name} is not a subprogram");
+            return new SemanticError(context, $"Symbol {name} is not a subprogram");
         }
 
-        var arguments = context.expressionList()?.expression()
+        var argumentsResults = context.expressionList()?.expression()
             .Select(e => e.Accept(this)!)
-            .ToArray() ?? Array.Empty<DataType>();
+            .ToArray() ?? Array.Empty<Result<DataType, SemanticError>>();
 
-        if (arguments.Length != subprogramInfo.Parameters.Count)
+        if (argumentsResults.Length != subprogramInfo.Parameters.Count)
         {
-            throw new SemanticException(context, $"Subprogram {name} expects {subprogramInfo.Parameters.Count} arguments, but {arguments.Length} were provided");
+            return AddError(context, $"Subprogram {name} expects {subprogramInfo.Parameters.Count} arguments, but {argumentsResults.Length} were provided");
         }
 
-        for (var i = 0; i < arguments.Length; i++)
+        for (var i = 0; i < argumentsResults.Length; i++)
         {
-            if (arguments[i] != subprogramInfo.Parameters[i].DataType)
+            if (argumentsResults[i].IsOk(out var argument) && argument != subprogramInfo.Parameters[i].DataType)
             {
-                throw new SemanticException(context, $"Subprogram {name} expects {subprogramInfo.Parameters[i].DataType} as argument {i + 1}, but {arguments[i]} was provided");
+                return AddError(context, $"Subprogram {name} expects {subprogramInfo.Parameters[i].DataType} as argument {i + 1}, but {argument} was provided");
             }
         }
 
         return subprogramInfo.ReturnType;
     }
 
-    public override DataType VisitLiteral(BeblangParser.LiteralContext context)
+    public override Result<DataType, SemanticError> VisitLiteral(BeblangParser.LiteralContext context)
     {
         if (context.INTEGER_LITERAL() is not null)
         {

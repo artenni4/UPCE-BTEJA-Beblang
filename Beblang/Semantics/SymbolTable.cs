@@ -11,20 +11,23 @@ public class SymbolTable
     {
         EnterScope();
     }
-
-    public void Define(ISymbolInfo symbolInfo)
+    
+    public bool TryDefine(ISymbolInfo symbolInfo, [NotNullWhen(false)] out SemanticError? error)
     {
         Debug.WriteLine($"Defining {symbolInfo.Name}, at scope {_scopes.Count}");
         var currentScope = _scopes.Peek();
         if (currentScope.TryGetValue(symbolInfo.Name, out var existingSymbolInfo))
         {
-            throw new SemanticException(existingSymbolInfo.Context,
+            error = new SemanticError(existingSymbolInfo.Context,
                 symbolInfo.Context is null 
                     ? $"Symbol {symbolInfo.Name} is already defined" 
                     : $"Symbol {symbolInfo.Name} at line {symbolInfo.Context.Start.Line} is already defined");
+            return false;
         }
         
         currentScope[symbolInfo.Name] = symbolInfo;
+        error = null;
+        return true;
     }
     
     public bool IsDefined(string name, [NotNullWhen(true)] out ISymbolInfo? symbolInfo)

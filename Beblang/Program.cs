@@ -26,4 +26,19 @@ foreach (var testProgram in testPrograms)
     var symbolTable = new SymbolTable().Merge(BuiltInSymbols.Symbols);
     var visitor = new BeblangSemanticVisitor(symbolTable);
     visitor.Visit(startContext);
+    if (visitor.Errors.Any())
+    {
+        Console.WriteLine("\n\nErrors encountered:");
+        PrintErrors(visitor.Errors);
+        Console.WriteLine("\n\n");
+        return;
+    }
+}
+
+static void PrintErrors(IEnumerable<SemanticError> errors)
+{
+    foreach (var error in errors)
+    {
+        Console.WriteLine(error);
+    }
 }

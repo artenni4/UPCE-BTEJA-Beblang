@@ -1,4 +1,6 @@
-﻿namespace Beblang.Semantics;
+﻿using System.Diagnostics.CodeAnalysis;
+
+namespace Beblang.Semantics;
 
 public static class SymbolTableExtensions
 {
@@ -6,7 +8,10 @@ public static class SymbolTableExtensions
     {
         foreach (var symbolInfo in symbolInfos)
         {
-            symbolTable.Define(symbolInfo);
+            if (!symbolTable.TryDefine(symbolInfo, out _))
+            {
+                throw new Exception("Built-in symbols should not conflict with each other");
+            }
         }
 
         return symbolTable;
