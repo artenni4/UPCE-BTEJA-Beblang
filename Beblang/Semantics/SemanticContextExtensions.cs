@@ -44,7 +44,8 @@ public static class SemanticContextExtensions
         if (context.ARRAY() is not null)
         {
             var ofType = context.type().GetDataType();
-            return DataType.Array(ofType);
+            var size = int.Parse(context.INTEGER_LITERAL().GetText());
+            return DataType.Array(ofType, size);
         }
 
         throw new NotSupportedException($"Type {context.GetText()} is not supported");

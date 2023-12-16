@@ -190,7 +190,7 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
         var variableType = variableInfo.DataType;
         foreach (var selector in context.selector())
         {
-            if (!variableType.IsArray(out var ofType))
+            if (!variableType.IsArray(out var arrayInfo))
             {
                 return AddError(context, $"Symbol {name} is not an array");
             }
@@ -201,7 +201,7 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
                 AddError(context, $"Selector {selector.GetText()} is not an integer");
             }
             
-            variableType = ofType;
+            variableType = arrayInfo.OfType;
         }
             
         return variableType;

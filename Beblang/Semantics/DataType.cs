@@ -13,28 +13,32 @@ public class DataType : IEquatable<DataType>
         Array,
         Void,
     };
+    
+    public record ArrayInfo(DataType OfType, int Size);
 
-    private readonly IReadOnlyList<PrimitiveType> _type;
+    private readonly PrimitiveType _type;
+    private readonly ArrayInfo? _arrayInfo;
 
     private DataType(PrimitiveType type)
-    {
-        _type = new[] { type };
-    }
-    
-    private DataType(IReadOnlyList<PrimitiveType> type)
     {
         _type = type;
     }
 
-    public bool IsArray([NotNullWhen(true)] out DataType? ofType)
+    private DataType(ArrayInfo arrayInfo)
     {
-        if (_type.Count == 1)
+        _type = PrimitiveType.Array;
+        _arrayInfo = arrayInfo;
+    }
+
+    public bool IsArray([NotNullWhen(true)] out ArrayInfo? arrayInfo)
+    {
+        if (_arrayInfo is null)
         {
-            ofType = null;
+            arrayInfo = null;
             return false;
         }
 
-        ofType = new DataType(_type.Skip(1).ToArray());
+        arrayInfo = _arrayInfo;
         return true;
     }
     
@@ -43,29 +47,26 @@ public class DataType : IEquatable<DataType>
     public static DataType String { get; } = new(PrimitiveType.String);
     public static DataType Boolean { get; } = new(PrimitiveType.Boolean);
     public static DataType Void { get; } = new(PrimitiveType.Void);
-    public static DataType Array(DataType ofType)
+    public static DataType Array(DataType ofType, int size)
     {
-        if (ofType._type.Take(..^1).Any(t => t != PrimitiveType.Array))
-        {
-            throw new ArgumentException("Array definition must contain primitive type in the last position");
-        }
-        return new DataType(ofType._type.Prepend(PrimitiveType.Array).ToArray());
+        return new DataType(new ArrayInfo(ofType, size));
     }
 
     public override string ToString()
     {
-        return _type switch
+        return _arrayInfo switch
         {
-            { Count: 1 } => _type[0] switch
+            null => _type switch
             {
                 PrimitiveType.Integer => "INTEGER",
                 PrimitiveType.Real => "REAL",
                 PrimitiveType.String => "STRING",
                 PrimitiveType.Boolean => "BOOLEAN",
-                PrimitiveType.Array => throw new InvalidOperationException("Array must have at least one type"),
+                PrimitiveType.Void => "VOID",
+                PrimitiveType.Array => throw new InvalidOperationException("Array does not contain array info"),
                 _ => throw new NotSupportedException()
             },
-            _ => $"ARRAY OF {new DataType(_type.Skip(1).ToArray())}"
+            _ => $"ARRAY {_arrayInfo.Size} OF {_arrayInfo.OfType}"
         };
     }
 
@@ -83,7 +84,7 @@ public class DataType : IEquatable<DataType>
     {
         if (ReferenceEquals(null, other)) return false;
         if (ReferenceEquals(this, other)) return true;
-        return _type.SequenceEqual(other._type);
+        return _type == other._type && Equals(_arrayInfo, other._arrayInfo);
     }
 
     public override bool Equals(object? obj)
@@ -96,6 +97,6 @@ public class DataType : IEquatable<DataType>
 
     public override int GetHashCode()
     {
-        return _type.GetHashCode();
+        return HashCode.Combine((int)_type, _arrayInfo);
     }
 }
