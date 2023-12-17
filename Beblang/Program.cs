@@ -6,7 +6,8 @@ Trace.Listeners.Add(new ConsoleTraceListener());
 
 var testPrograms = new[]
 {
-    "Resources/test.beb",
+    "Resources/simple.beb",
+    // "Resources/test.beb",
     // "Resources/factorial.beb",
     // "Resources/gcd.beb",
     // "Resources/real_numbers.beb",

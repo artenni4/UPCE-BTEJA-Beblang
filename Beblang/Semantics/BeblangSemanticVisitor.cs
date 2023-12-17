@@ -30,11 +30,13 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
     public override Result<DataType, SemanticError>? VisitModule(BeblangParser.ModuleContext context)
     {
         var moduleName = context.moduleName.GetFullName();
-        if (!_symbolTable.TryDefine(new ModuleInfo(moduleName, context), out var error))
+        var moduleInfo = new ModuleInfo(moduleName, context);
+        if (!_symbolTable.TryDefine(moduleInfo, out var error))
         {
             return AddError(error);
         }
-
+        AnnotationTable.AnnotateSymbols(context, moduleInfo);
+        
         context.moduleStatements().Accept(this);
         
         return null;
@@ -372,7 +374,7 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
         {
             return new SemanticError(context, $"Symbol {name} is not a subprogram");
         }
-
+        
         var argumentsResults = context.expressionList()?.expression()
             .Select(e => e.Accept(this)!)
             .ToArray() ?? Array.Empty<Result<DataType, SemanticError>>();
@@ -389,7 +391,8 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
                 return AddError(context, $"Subprogram {name} expects {subprogramInfo.Parameters[i].DataType} as argument {i + 1}, but {argument} was provided");
             }
         }
-
+        
+        AnnotationTable.AnnotateSymbols(context, subprogramInfo);
         return subprogramInfo.ReturnType;
     }
 
