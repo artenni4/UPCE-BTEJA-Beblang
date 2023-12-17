@@ -2,6 +2,7 @@
 
 public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, SemanticError>?>
 {
+    public AnnotationTable AnnotationTable { get; } = new();
     private readonly List<SemanticError> _errors = new();
     public IReadOnlyList<SemanticError> Errors => _errors;
     private readonly SymbolTable _symbolTable;
@@ -41,7 +42,7 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
 
     public override Result<DataType, SemanticError>? VisitSubprogram(BeblangParser.SubprogramContext context)
     {
-        var subprogramInfo = context.subprogramHeading().GetSubprogramInfo();
+        var subprogramInfo = GetSubprogramInfo(context.subprogramHeading());
         if (_symbolTable.IsDefined(subprogramInfo.Name, out var existingSymbolInfo) &&
             existingSymbolInfo is SubprogramInfo existingSubprogramInfo)
         {
@@ -80,7 +81,7 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
 
     public override Result<DataType, SemanticError>? VisitSubprogramDeclaration(BeblangParser.SubprogramDeclarationContext context)
     {
-        var subprogramInfo = context.subprogramHeading().GetSubprogramInfo();
+        var subprogramInfo = GetSubprogramInfo(context.subprogramHeading());
         if (!_symbolTable.TryDefine(subprogramInfo, out var error))
         {
             return AddError(error);
@@ -89,20 +90,71 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
         return null;
     }
 
+    private static SubprogramInfo GetSubprogramInfo(BeblangParser.SubprogramHeadingContext context)
+    {
+        var subprogramName = context.IDENTIFIER().GetText();
+        var returnType = context.type() is null ? DataType.Void : GetDataType(context.type());
+        var parameters = context.paramList()?.variableDeclaration()
+            .SelectMany(GetVariableSymbolInfo)
+            .ToArray() ?? Array.Empty<VariableInfo>();
+        
+        var subprogramInfo = new SubprogramInfo(subprogramName, context, parameters, returnType);
+
+        return subprogramInfo;
+    }
+
     public override Result<DataType, SemanticError>? VisitVariableDeclarationBlock(BeblangParser.VariableDeclarationBlockContext context)
     {
         foreach (var variableDeclarationContext in context.variableDeclaration())
         {
-            foreach (var symbolInfo in variableDeclarationContext.GetVariableSymbolInfo())
+            var variableInfos = GetVariableSymbolInfo(variableDeclarationContext);
+            foreach (var symbolInfo in variableInfos)
             {
                 if (!_symbolTable.TryDefine(symbolInfo, out var error))
                 {
                     return AddError(error);
                 }
             }
+            AnnotationTable.AnnotateSymbols(variableDeclarationContext, variableInfos);
         }
 
         return null;
+    }
+
+    private static VariableInfo[] GetVariableSymbolInfo(BeblangParser.VariableDeclarationContext context)
+    {
+        var dataType = GetDataType(context.type());
+        return context.IDENTIFIER()
+            .Select(node => node.GetText())
+            .Select(identifier => new VariableInfo(identifier, context, dataType))
+            .ToArray();
+    }
+
+    private static DataType GetDataType(BeblangParser.TypeContext context)
+    {
+        if (context.INTEGER() is not null)
+        {
+            return DataType.Integer;
+        }
+
+        if (context.REAL() is not null)
+        {
+            return DataType.Real;
+        }
+
+        if (context.STRING() is not null)
+        {
+            return DataType.String;
+        }
+
+        if (context.ARRAY() is not null)
+        {
+            var ofType = GetDataType(context.type());
+            var size = int.Parse(context.INTEGER_LITERAL().GetText());
+            return DataType.Array(ofType, size);
+        }
+
+        throw new NotSupportedException($"Type {context.GetText()} is not supported");
     }
 
     public override Result<DataType, SemanticError>? VisitIfStatement(BeblangParser.IfStatementContext context)
@@ -249,7 +301,7 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
 
                 if (rightTypeResult.IsOk(out var rightType) && leftType != rightType)
                 {
-                    _errors.Add(new SemanticError(context, $"Cannot perform binary operation ({context.binaryOp(i - 1).GetText()}) on {leftType} and {rightType}"));
+                    AddError(context, $"Cannot perform binary operation ({context.binaryOp(i - 1).GetText()}) on {leftType} and {rightType}");
                 }
             }
         }

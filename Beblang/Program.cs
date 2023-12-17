@@ -35,7 +35,7 @@ foreach (var testProgram in testPrograms)
         return;
     }
     
-    var irGenerationVisitor = new BeblangIRGenerationVisitor();
+    var irGenerationVisitor = new BeblangIRGenerationVisitor(beblangSemanticVisitor.AnnotationTable);
     irGenerationVisitor.Visit(startContext);
     irGenerationVisitor.Module.Dump();
 }
