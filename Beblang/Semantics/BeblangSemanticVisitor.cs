@@ -62,6 +62,7 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
             }
         }
         
+        AnnotationTable.AnnotateSymbols(context, subprogramInfo);
         _currentSubprogram = subprogramInfo;
         _symbolTable.EnterScope();
         
@@ -194,7 +195,13 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
     public override Result<DataType, SemanticError>? VisitReturnStatement(BeblangParser.ReturnStatementContext context)
     {
         var result = context.expression()?.Accept(this)!;
-        if (result.IsOk(out var expressionDataType) && expressionDataType != _currentSubprogram!.ReturnType)
+        if (result is null && _currentSubprogram!.ReturnType != DataType.Void)
+        {
+            AddError(context, $"Cannot return {DataType.Void} from {_currentSubprogram.Name}, expected {_currentSubprogram.ReturnType}");
+        }
+
+        if (result is not null && result.IsOk(out var expressionDataType) &&
+            expressionDataType != _currentSubprogram!.ReturnType)
         {
             AddError(context, $"Cannot return {expressionDataType} from {_currentSubprogram.Name}, expected {_currentSubprogram.ReturnType}");
         }

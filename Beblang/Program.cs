@@ -38,7 +38,31 @@ foreach (var testProgram in testPrograms)
     
     var irGenerationVisitor = new BeblangIRGenerationVisitor(beblangSemanticVisitor.AnnotationTable);
     irGenerationVisitor.Visit(startContext);
+    var llFile = testProgram + ".ll";
+    irGenerationVisitor.Module.PrintToFile(llFile);
     irGenerationVisitor.Module.Dump();
+    
+    var llcStartInfo = new ProcessStartInfo
+    {
+        FileName = "clang",
+        Arguments = $"{llFile} -o {testProgram}.exe",
+        UseShellExecute = false,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true
+    };
+
+    using var llcProcess = Process.Start(llcStartInfo);
+    if (llcProcess != null)
+    {
+        llcProcess.WaitForExit();
+
+        // Handle output and errors
+        var llcOutput = llcProcess.StandardOutput.ReadToEnd();
+        var llcError = llcProcess.StandardError.ReadToEnd();
+
+        Console.WriteLine(llcOutput);
+        Console.WriteLine(llcError);
+    }
 }
 
 static void PrintErrors(IEnumerable<SemanticError> errors)

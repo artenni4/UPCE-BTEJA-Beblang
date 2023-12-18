@@ -1,7 +1,5 @@
 ﻿MODULE Test;
 
-VAR s: STRING;
-
 BEGIN
-  s := "Hello World!";
+  PrintLine("Hello, World!123");
 END.
