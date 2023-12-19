@@ -32,7 +32,6 @@ foreach (var testProgram in testPrograms)
     {
         Console.WriteLine("\n\nErrors encountered:");
         PrintErrors(beblangSemanticVisitor.Errors);
-        Console.WriteLine("\n\n");
         return;
     }
     

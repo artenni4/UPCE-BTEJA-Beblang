@@ -84,7 +84,9 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
             var parameterName = subprogramInfo.Parameters[i].Name;
             var parameter = subprogram.Value.GetParam((uint)i);
             var parameterType = ToLLVMType(subprogramInfo.Parameters[i].DataType);
-            _variableTable.Define(parameterName, parameterType, parameter);
+            var parameterCopy = _builder.BuildAlloca(parameterType); // need to copy param to be able to modify it
+            _builder.BuildStore(parameter, parameterCopy);
+            _variableTable.Define(parameterName, parameterType, parameterCopy);
         }
         
         context.variableDeclarationBlock()?.Accept(this);
@@ -178,6 +180,7 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
         var endBlock = currentFunction.AppendBasicBlock("end");
 
         // condition
+        _builder.BuildBr(conditionBlock);
         _builder.PositionAtEnd(conditionBlock);
         var condition = context.expression().Accept(this);
         _builder.BuildCondBr(condition, whileBlock, endBlock);
@@ -204,13 +207,13 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
     public override LLVMValueRef VisitAssignment(BeblangParser.AssignmentContext context)
     {
         var variableName = context.designator().IDENTIFIER().GetText();
-        if (!_variableTable.IsDefined(variableName, out var variableAlloca))
+        if (!_variableTable.IsDefined(variableName, out var variable))
         {
             throw new InvalidOperationException($"Variable '{variableName}' not defined.");
         }
 
         var value = context.expression().Accept(this);
-        _builder.BuildStore(value, variableAlloca.Value);
+        _builder.BuildStore(value, variable.Value);
         return value;
     }
 
@@ -223,33 +226,37 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
         }
 
         var right = context.simpleExpression(1).Accept(this);
+        var dataType = _annotationTable.GetType(context.simpleExpression(0));
         var op = context.comparisonOp().GetText();
-        if (op == "=")
+        if (dataType == DataType.Integer)
         {
-            return _builder.BuildICmp(LLVMIntPredicate.LLVMIntEQ, left, right);
-        }
-        if (op == "#")
-        {
-            return _builder.BuildICmp(LLVMIntPredicate.LLVMIntNE, left, right);
-        }
-        if (op == "<")
-        {
-            return _builder.BuildICmp(LLVMIntPredicate.LLVMIntSLT, left, right);
-        }
-        if (op == "<=")
-        {
-            return _builder.BuildICmp(LLVMIntPredicate.LLVMIntSLE, left, right);
-        }
-        if (op == ">")
-        {
-            return _builder.BuildICmp(LLVMIntPredicate.LLVMIntSGT, left, right);
-        }
-        if (op == ">=")
-        {
-            return _builder.BuildICmp(LLVMIntPredicate.LLVMIntSGE, left, right);
+            return op switch
+            {
+                "="  => _builder.BuildICmp(LLVMIntPredicate.LLVMIntEQ, left, right),
+                "#"  => _builder.BuildICmp(LLVMIntPredicate.LLVMIntNE, left, right),
+                "<"  => _builder.BuildICmp(LLVMIntPredicate.LLVMIntSLT, left, right),
+                "<=" => _builder.BuildICmp(LLVMIntPredicate.LLVMIntSLE, left, right),
+                ">"  => _builder.BuildICmp(LLVMIntPredicate.LLVMIntSGT, left, right),
+                ">=" => _builder.BuildICmp(LLVMIntPredicate.LLVMIntSGE, left, right),
+                _ => throw new NotSupportedException($"Operator {op} is not supported")
+            };
         }
         
-        throw new NotSupportedException($"Operator {op} is not supported");
+        if (dataType == DataType.Real)
+        {
+            return op switch
+            {
+                "="  => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOEQ, left, right),
+                "#"  => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealONE, left, right),
+                "<"  => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOLT, left, right),
+                "<=" => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOLE, left, right),
+                ">"  => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOGT, left, right),
+                ">=" => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOGE, left, right),
+                _ => throw new NotSupportedException($"Operator {op} is not supported")
+            };
+        }
+
+        throw new NotSupportedException($"Data type {dataType} does not support comparison");
     }
 
     public override LLVMValueRef VisitSimpleExpression(BeblangParser.SimpleExpressionContext context)
@@ -344,7 +351,7 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
                 throw new InvalidOperationException($"Variable '{variableName}' not defined.");
             }
 
-            return _builder.BuildLoad2(typeValue.Type, typeValue.Value);
+            return typeValue.Value;
         }
         
         if (context.subprogramCall() is not null)

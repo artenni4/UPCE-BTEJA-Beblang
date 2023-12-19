@@ -1,5 +1,19 @@
 ﻿MODULE Test;
 
+PROCEDURE CalcGcd(a, b: INTEGER) : INTEGER
+VAR
+  tmp: INTEGER;
 BEGIN
-  PrintLine("Hello, World!123");
+  WHILE b # 0
+  DO
+    tmp := b;
+    b := a MOD b;
+    a := tmp;
+  END;
+  
+  RETURN a;
+END;
+
+BEGIN
+  PrintLine("Hello, World!");
 END.

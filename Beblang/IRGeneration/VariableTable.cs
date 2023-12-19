@@ -17,17 +17,17 @@ public class VariableTable
         currentScope[name] = new TypeValue(type, variable);
     }
     
-    public bool IsDefined(string name, [NotNullWhen(true)] out TypeValue? symbolInfo)
+    public bool IsDefined(string name, [NotNullWhen(true)] out TypeValue? variable)
     {
         foreach (var scope in _variables)
         {
-            if (scope.TryGetValue(name, out symbolInfo))
+            if (scope.TryGetValue(name, out variable))
             {
                 return true;
             }
         }
 
-        symbolInfo = null;
+        variable = null;
         return false;
     }
 

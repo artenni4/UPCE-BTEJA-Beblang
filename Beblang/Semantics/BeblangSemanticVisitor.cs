@@ -289,10 +289,16 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
     }
 
     public override Result<DataType, SemanticError>? VisitSimpleExpression(BeblangParser.SimpleExpressionContext context)
-    {
+    { 
+        var firstResult = context.term(0).Accept(this);
+        if (firstResult is not null && firstResult.IsOk(out var dataType))
+        {
+            AnnotationTable.AnnotateType(context, dataType);
+        }
+        
         if (context.term().Length == 1)
         {
-            return context.term(0).Accept(this);
+            return firstResult;
         }
 
         for (var i = 1; i < context.term().Length; i++)
@@ -327,10 +333,12 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
 
         for (var i = 1; i < context.factor().Length; i++)
         {
-            var leftType = context.factor(i - 1).Accept(this)!;
-            var rightType = context.factor(i).Accept(this)!;
+            var leftTypeResult = context.factor(i - 1).Accept(this)!;
+            var rightTypeResult = context.factor(i).Accept(this)!;
 
-            if (leftType != rightType)
+            if (leftTypeResult.IsOk(out var leftType) &&
+                rightTypeResult.IsOk(out var rightType) &&
+                leftType != rightType)
             {
                 AddError(context, $"Cannot perform binary operation ({context.termOp(i - 1).GetText()}) on {leftType} and {rightType}");
             }
@@ -374,12 +382,12 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
         var name = context.designator().IDENTIFIER().GetText();
         if (!_symbolTable.IsDefined(name, out var symbolInfo))
         {
-            return new SemanticError(context, $"Symbol {name} is not defined");
+            return AddError(context, $"Symbol {name} is not defined");
         }
 
         if (symbolInfo is not SubprogramInfo subprogramInfo)
         {
-            return new SemanticError(context, $"Symbol {name} is not a subprogram");
+            return AddError(context, $"Symbol {name} is not a subprogram");
         }
         
         var argumentsResults = context.expressionList()?.expression()
