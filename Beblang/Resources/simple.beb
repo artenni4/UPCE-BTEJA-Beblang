@@ -1,5 +1,7 @@
 ﻿MODULE Test;
 
+VAR global_a, gcd: INTEGER;
+
 PROCEDURE CalcGcd(a, b: INTEGER) : INTEGER
 VAR
   tmp: INTEGER;
@@ -15,5 +17,8 @@ BEGIN
 END;
 
 BEGIN
-  PrintLine("Hello, World!");
+  global_a := 72;
+  PrintString("Hello, World!\n");
+  gcd := CalcGcd(global_a, 42);
+  PrintInteger(gcd);
 END.

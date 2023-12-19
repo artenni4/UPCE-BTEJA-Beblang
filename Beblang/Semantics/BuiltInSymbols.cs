@@ -2,18 +2,22 @@
 
 public static class BuiltInSymbols
 {
-    public static IReadOnlyList<ISymbolInfo> Symbols { get; } = new[]
+    public static SubprogramInfo PrintString { get; } = new("PrintString", Context: null, new []{ new VariableInfo("text", Context: null, DataType.String) }, ReturnType: DataType.Void);
+    public static SubprogramInfo PrintInteger { get; } = new("PrintInteger", Context: null, new []{ new VariableInfo("text", Context: null, DataType.Integer) }, ReturnType: DataType.Void);
+    public static SubprogramInfo PrintReal { get; } = new("PrintReal", Context: null, new []{ new VariableInfo("text", Context: null, DataType.Real) }, ReturnType: DataType.Void);
+    public static SubprogramInfo ReadLine { get; } = new("ReadLine", Context: null, new []{ new VariableInfo("text", Context: null, DataType.String) }, ReturnType: DataType.Void);
+    public static SubprogramInfo Halt { get; } = new("HALT", Context: null, new []{ new VariableInfo("code", Context: null, DataType.Integer) }, ReturnType: DataType.Void);
+    public static SubprogramInfo IntegerToReal { get; } = new("INTEGER_TO_REAL", Context: null, new []{ new VariableInfo("value", Context: null, DataType.Integer) }, ReturnType: DataType.Real);
+    public static SubprogramInfo RealToInteger { get; } = new("REAL_TO_INTEGER", Context: null, new []{ new VariableInfo("value", Context: null, DataType.Real) }, ReturnType: DataType.Integer);
+    
+    public static readonly IReadOnlyList<ISymbolInfo> Symbols = new ISymbolInfo[]
     {
-        new SubprogramInfo("PrintLine", Context: null, new []{ new VariableInfo("text", Context: null, DataType.String) }, ReturnType: DataType.Void),
-        new SubprogramInfo("Print", Context: null, new []{ new VariableInfo("text", Context: null, DataType.String) }, ReturnType: DataType.Void),
-        new SubprogramInfo("ReadLine", Context: null, new []{ new VariableInfo("text", Context: null, DataType.String) }, ReturnType: DataType.Void),
-        new SubprogramInfo("HALT", Context: null, new []{ new VariableInfo("code", Context: null, DataType.Integer) }, ReturnType: DataType.Void),
-        
-        new SubprogramInfo("INTEGER_TO_STRING", Context: null, new []{ new VariableInfo("value", Context: null, DataType.Integer) }, ReturnType: DataType.String),
-        new SubprogramInfo("REAL_TO_STRING", Context: null, new []{ new VariableInfo("value", Context: null, DataType.Real) }, ReturnType: DataType.String),
-        new SubprogramInfo("BOOLEAN_TO_STRING", Context: null, new []{ new VariableInfo("value", Context: null, DataType.Boolean) }, ReturnType: DataType.String),
-        
-        new SubprogramInfo("INTEGER_TO_REAL", Context: null, new []{ new VariableInfo("value", Context: null, DataType.Integer) }, ReturnType: DataType.Real),
-        new SubprogramInfo("REAL_TO_INTEGER", Context: null, new []{ new VariableInfo("value", Context: null, DataType.Real) }, ReturnType: DataType.Integer),
+        PrintString,
+        PrintInteger,
+        PrintReal,
+        ReadLine,
+        Halt,
+        IntegerToReal,
+        RealToInteger
     };
 }

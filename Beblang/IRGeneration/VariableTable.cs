@@ -4,20 +4,20 @@ namespace Beblang.IRGeneration;
 
 public class VariableTable
 {
-    private readonly Stack<Dictionary<string, TypeValue>> _variables = new();
+    private readonly Stack<Dictionary<string, ITypeData>> _variables = new();
 
     public VariableTable()
     {
         EnterScope();
     }
     
-    public void Define(string name, LLVMTypeRef type, LLVMValueRef variable)
+    public void Define(string name, ITypeData variable)
     {
         var currentScope = _variables.Peek();
-        currentScope[name] = new TypeValue(type, variable);
+        currentScope[name] = variable;
     }
     
-    public bool IsDefined(string name, [NotNullWhen(true)] out TypeValue? variable)
+    public bool IsDefined(string name, [NotNullWhen(true)] out ITypeData? variable)
     {
         foreach (var scope in _variables)
         {
@@ -33,7 +33,7 @@ public class VariableTable
 
     public void EnterScope()
     {
-        _variables.Push(new Dictionary<string, TypeValue>());
+        _variables.Push(new Dictionary<string, ITypeData>());
     }
 
     public void ExitScope()

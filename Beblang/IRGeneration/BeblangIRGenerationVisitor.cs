@@ -1,11 +1,10 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
-using System.Text;
+﻿using System.Globalization;
+using System.Text.RegularExpressions;
 using Beblang.Semantics;
 
 namespace Beblang.IRGeneration;
 
-public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
+public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
 {
     public LLVMModuleRef Module => _module;
     
@@ -13,28 +12,28 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
     private LLVMBuilderRef _builder;
     private readonly VariableTable _variableTable = new();
     private readonly AnnotationTable _annotationTable;
-    private ExternalBindings _externalBindings = null!;
+    private PredefinedValues _predefinedValues = null!;
+    private readonly Dictionary<string, PointerData> _stringLiterals = new();
     
     private bool _globalScope = true;
     
-    public BeblangIRGenerationVisitor(AnnotationTable annotationTable)
+    public BeblangIrGenerationVisitor(AnnotationTable annotationTable)
     {
         _annotationTable = annotationTable;
     }
 
-    public override LLVMValueRef VisitModule(BeblangParser.ModuleContext context)
+    public override ITypeData? VisitModule(BeblangParser.ModuleContext context)
     {
         var moduleInfo = _annotationTable.GetSymbol<ModuleInfo>(context);
         _module = LLVMModuleRef.CreateWithName(moduleInfo.Name);
-        _externalBindings = new ExternalBindings(_module);
+        _predefinedValues = new PredefinedValues(_module);
         _builder = _module.Context.CreateBuilder();
-
         context.moduleStatements().Accept(this);
 
         return default;
     }
 
-    public override LLVMValueRef VisitModuleStatements(BeblangParser.ModuleStatementsContext context)
+    public override ITypeData? VisitModuleStatements(BeblangParser.ModuleStatementsContext context)
     {
         context.variableDeclarationBlock()?.Accept(this);
         _globalScope = false;
@@ -61,32 +60,37 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
         return default;
     }
 
-    public override LLVMValueRef VisitSubprogram(BeblangParser.SubprogramContext context)
+    public override ITypeData? VisitSubprogram(BeblangParser.SubprogramContext context)
     {
         var subprogramInfo = _annotationTable.GetSymbol<SubprogramInfo>(context);
 
-        if (!_variableTable.IsDefined(subprogramInfo.Name, out var subprogram))
+        if (!_variableTable.IsDefined(subprogramInfo.Name, out var symbolTypeData))
         {
             var subprogramType = LLVMTypeRef.CreateFunction(
-                ReturnType: ToLLVMType(subprogramInfo.ReturnType), 
-                ParamTypes: subprogramInfo.Parameters.Select(parameter => ToLLVMType(parameter.DataType)).ToArray());
+                ReturnType: subprogramInfo.ReturnType.ToLlvmType(), 
+                ParamTypes: subprogramInfo.Parameters.Select(parameter => parameter.DataType.ToLlvmType()).ToArray());
             var subprogramValue = _module.AddFunction(subprogramInfo.Name, subprogramType);
             
-            subprogram = new TypeValue(subprogramType, subprogramValue);
-            _variableTable.Define(subprogramInfo.Name, subprogramType, subprogramValue);
+            symbolTypeData = new FunctionData(subprogramType, subprogramValue);
+            _variableTable.Define(subprogramInfo.Name, symbolTypeData);
         }
-        
-        var entryBlock = subprogram.Value.AppendBasicBlock("entry");
+
+        if (symbolTypeData is not FunctionData functionData)
+        {
+            throw new InvalidOperationException($"Symbol '{subprogramInfo.Name}' is not a function.");
+        }
+
+        var entryBlock = functionData.Reference.AppendBasicBlock("entry");
         _builder.PositionAtEnd(entryBlock);
         _variableTable.EnterScope();
         for (var i = 0; i < subprogramInfo.Parameters.Count; i++)
         {
             var parameterName = subprogramInfo.Parameters[i].Name;
-            var parameter = subprogram.Value.GetParam((uint)i);
-            var parameterType = ToLLVMType(subprogramInfo.Parameters[i].DataType);
+            var parameter = functionData.Reference.GetParam((uint)i);
+            var parameterType = subprogramInfo.Parameters[i].DataType.ToLlvmType();
             var parameterCopy = _builder.BuildAlloca(parameterType); // need to copy param to be able to modify it
             _builder.BuildStore(parameter, parameterCopy);
-            _variableTable.Define(parameterName, parameterType, parameterCopy);
+            _variableTable.Define(parameterName, new PointerData(parameterType, parameterCopy, IsValuePointer: true));
         }
         
         context.variableDeclarationBlock()?.Accept(this);
@@ -95,44 +99,44 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
         return default;
     }
 
-    public override LLVMValueRef VisitSubprogramDeclaration(BeblangParser.SubprogramDeclarationContext context)
+    public override ITypeData? VisitSubprogramDeclaration(BeblangParser.SubprogramDeclarationContext context)
     {
         var subprogramInfo = _annotationTable.GetSymbol<SubprogramInfo>(context);
         var functionType = LLVMTypeRef.CreateFunction(
-            ReturnType: ToLLVMType(subprogramInfo.ReturnType), 
-            ParamTypes: subprogramInfo.Parameters.Select(parameter => ToLLVMType(parameter.DataType)).ToArray());
+            ReturnType: subprogramInfo.ReturnType.ToLlvmType(), 
+            ParamTypes: subprogramInfo.Parameters.Select(parameter => parameter.DataType.ToLlvmType()).ToArray());
         
         var function = _module.AddFunction(subprogramInfo.Name, functionType);
-        _variableTable.Define(subprogramInfo.Name, functionType, function);
+        _variableTable.Define(subprogramInfo.Name, new FunctionData(functionType, function));
         return default;
     }
 
-    public override LLVMValueRef VisitVariableDeclarationBlock(BeblangParser.VariableDeclarationBlockContext context)
+    public override ITypeData? VisitVariableDeclarationBlock(BeblangParser.VariableDeclarationBlockContext context)
     {
         foreach (var variableDeclarationContext in context.variableDeclaration())
         {
             foreach (var variable in _annotationTable.GetSymbols<VariableInfo>(variableDeclarationContext))
             {
-                var llvmType = ToLLVMType(variable.DataType);
-                LLVMValueRef value;
+                var llvmType = variable.DataType.ToLlvmType();
+                LLVMValueRef definedVariable;
                 if (_globalScope)
                 {
-                    value = _module.AddGlobal(llvmType, variable.Name);
-                    value.Initializer = GetDefaultValue(variable.DataType);
-                    value.IsGlobalConstant = false;
+                    definedVariable = _module.AddGlobal(llvmType, variable.Name);
+                    definedVariable.Initializer = variable.DataType.GetDefaultValue();
+                    definedVariable.IsGlobalConstant = false;
                 }
                 else
                 {
-                    value = _builder.BuildAlloca(llvmType, variable.Name);
+                    definedVariable = _builder.BuildAlloca(llvmType, variable.Name);
                 }
-                _variableTable.Define(variable.Name, llvmType, value);
+                _variableTable.Define(variable.Name, new PointerData(llvmType, definedVariable, IsValuePointer: true));
             }
         }
 
         return default;
     }
 
-    public override LLVMValueRef VisitIfStatement(BeblangParser.IfStatementContext context)
+    public override ITypeData? VisitIfStatement(BeblangParser.IfStatementContext context)
     {
         var currentFunction = _builder.InsertBlock.Parent;
         
@@ -145,7 +149,7 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
 
         // condition
         _builder.PositionAtEnd(conditionBlock);
-        var condition = context.expression().Accept(this);
+        var condition = GetValue(context.expression().Accept(this)!);
         _builder.BuildCondBr(condition, ifBlock, elseBlock);
         
         // if
@@ -157,7 +161,7 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
         for (var i = 0; i < context.elseIfStatement().Length; i++)
         {
             _builder.PositionAtEnd(elseIfBlocks[i]);
-            var elseIfCondition = context.elseIfStatement(i).expression().Accept(this);
+            var elseIfCondition = GetValue(context.elseIfStatement(i).expression().Accept(this)!);
             _builder.BuildCondBr(elseIfCondition, ifBlock, i == context.elseIfStatement().Length - 1 ? elseBlock : elseIfBlocks[i + 1]);
         }
         
@@ -171,7 +175,7 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
         return default;
     }
 
-    public override LLVMValueRef VisitWhileStatement(BeblangParser.WhileStatementContext context)
+    public override ITypeData? VisitWhileStatement(BeblangParser.WhileStatementContext context)
     {
         var currentFunction = _builder.InsertBlock.Parent;
         
@@ -182,7 +186,7 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
         // condition
         _builder.BuildBr(conditionBlock);
         _builder.PositionAtEnd(conditionBlock);
-        var condition = context.expression().Accept(this);
+        var condition = GetValue(context.expression().Accept(this)!);
         _builder.BuildCondBr(condition, whileBlock, endBlock);
         
         // while
@@ -198,13 +202,23 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
         return default;
     }
 
-    public override LLVMValueRef VisitReturnStatement(BeblangParser.ReturnStatementContext context)
+    public override ITypeData? VisitReturnStatement(BeblangParser.ReturnStatementContext context)
     {
-        var returnValue = context.expression()?.Accept(this);
-        return returnValue is null ? _builder.BuildRetVoid() : _builder.BuildRet(returnValue.Value);
+        var returnTypeData = context.expression()?.Accept(this);
+        if (returnTypeData is null)
+        {
+            _builder.BuildRetVoid();
+        }
+        else
+        {
+            var returnValue = GetValue(returnTypeData);
+            _builder.BuildRet(returnValue);
+        }
+
+        return default;
     }
 
-    public override LLVMValueRef VisitAssignment(BeblangParser.AssignmentContext context)
+    public override ITypeData? VisitAssignment(BeblangParser.AssignmentContext context)
     {
         var variableName = context.designator().IDENTIFIER().GetText();
         if (!_variableTable.IsDefined(variableName, out var variable))
@@ -212,120 +226,141 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
             throw new InvalidOperationException($"Variable '{variableName}' not defined.");
         }
 
-        var value = context.expression().Accept(this);
-        _builder.BuildStore(value, variable.Value);
-        return value;
+        var value = GetValue(context.expression().Accept(this)!);
+        _builder.BuildStore(value, GetPointer(variable));
+        
+        return default;
     }
 
-    public override LLVMValueRef VisitExpression(BeblangParser.ExpressionContext context)
+    public override ITypeData VisitExpression(BeblangParser.ExpressionContext context)
     {
-        var left = context.simpleExpression(0).Accept(this);
+        var leftTypeData = context.simpleExpression(0).Accept(this)!;
         if (context.simpleExpression().Length == 1)
         {
-            return left;
+            return leftTypeData;
         }
 
-        var right = context.simpleExpression(1).Accept(this);
+        LLVMValueRef? resultValue = null;
+        var leftValue = GetValue(leftTypeData);
+        var rightValue = GetValue(context.simpleExpression(1).Accept(this)!);
         var dataType = _annotationTable.GetType(context.simpleExpression(0));
         var op = context.comparisonOp().GetText();
         if (dataType == DataType.Integer)
         {
-            return op switch
+            resultValue = op switch
             {
-                "="  => _builder.BuildICmp(LLVMIntPredicate.LLVMIntEQ, left, right),
-                "#"  => _builder.BuildICmp(LLVMIntPredicate.LLVMIntNE, left, right),
-                "<"  => _builder.BuildICmp(LLVMIntPredicate.LLVMIntSLT, left, right),
-                "<=" => _builder.BuildICmp(LLVMIntPredicate.LLVMIntSLE, left, right),
-                ">"  => _builder.BuildICmp(LLVMIntPredicate.LLVMIntSGT, left, right),
-                ">=" => _builder.BuildICmp(LLVMIntPredicate.LLVMIntSGE, left, right),
+                "="  => _builder.BuildICmp(LLVMIntPredicate.LLVMIntEQ, leftValue, rightValue),
+                "#"  => _builder.BuildICmp(LLVMIntPredicate.LLVMIntNE, leftValue, rightValue),
+                "<"  => _builder.BuildICmp(LLVMIntPredicate.LLVMIntSLT, leftValue, rightValue),
+                "<=" => _builder.BuildICmp(LLVMIntPredicate.LLVMIntSLE, leftValue, rightValue),
+                ">"  => _builder.BuildICmp(LLVMIntPredicate.LLVMIntSGT, leftValue, rightValue),
+                ">=" => _builder.BuildICmp(LLVMIntPredicate.LLVMIntSGE, leftValue, rightValue),
                 _ => throw new NotSupportedException($"Operator {op} is not supported")
             };
+
         }
         
         if (dataType == DataType.Real)
         {
-            return op switch
+            resultValue = op switch
             {
-                "="  => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOEQ, left, right),
-                "#"  => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealONE, left, right),
-                "<"  => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOLT, left, right),
-                "<=" => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOLE, left, right),
-                ">"  => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOGT, left, right),
-                ">=" => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOGE, left, right),
+                "="  => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOEQ, leftValue, rightValue),
+                "#"  => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealONE, leftValue, rightValue),
+                "<"  => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOLT, leftValue, rightValue),
+                "<=" => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOLE, leftValue, rightValue),
+                ">"  => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOGT, leftValue, rightValue),
+                ">=" => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOGE, leftValue, rightValue),
                 _ => throw new NotSupportedException($"Operator {op} is not supported")
             };
         }
 
+        if (resultValue.HasValue)
+        {
+            return new ValueData(LLVMTypeRef.Int1, resultValue.Value); // return bool
+        }
+        
         throw new NotSupportedException($"Data type {dataType} does not support comparison");
     }
 
-    public override LLVMValueRef VisitSimpleExpression(BeblangParser.SimpleExpressionContext context)
+    public override ITypeData VisitSimpleExpression(BeblangParser.SimpleExpressionContext context)
     {
-        var result = context.term(0).Accept(this);
-        if (context.unaryOp() is not null && context.unaryOp().GetText() == "-")
+        var resultTypeData = context.term(0).Accept(this)!;
+        if (context.unaryOp() is not null || context.binaryOp().Any(b => b.GetText() != "+"))
         {
-            result = _builder.BuildNeg(result);
+            var resultValue = GetValue(resultTypeData);
+            if (context.unaryOp() is not null && context.unaryOp().GetText() == "-")
+            {
+                resultValue = _builder.BuildNeg(resultValue);
+            }
+            
+            if (context.term().Length == 1)
+            {
+                return new ValueData(resultTypeData.ValueType, resultValue);
+            }
+            
+            for (var i = 1; i < context.term().Length; i++)
+            {
+                var rightValue = GetValue(context.term(i).Accept(this)!);
+                var op = context.binaryOp(i - 1);
+                
+                if (op.GetText() == "+")
+                {
+                    resultValue = _builder.BuildAdd(resultValue, rightValue);
+                }
+                else if (op.GetText() == "-")
+                {
+                    resultValue = _builder.BuildSub(resultValue, rightValue);
+                }
+                else if (op.GetText() == "OR")
+                {
+                    resultValue = _builder.BuildOr(resultValue, rightValue);
+                }
+                else
+                {
+                    throw new NotSupportedException($"Operator {op} is not supported");
+                }
+            }
+
+            return new ValueData(resultTypeData.ValueType, resultValue);
         }
         
         if (context.term().Length == 1)
         {
-            return result;
-        }
-        
-        for (var i = 1; i < context.term().Length; i++)
-        {
-            var right = context.term(i).Accept(this);
-            var op = context.binaryOp(i - 1);
-            
-            if (op.GetText() == "+")
-            {
-                result = _builder.BuildAdd(result, right);
-            }
-            else if (op.GetText() == "-")
-            {
-                result = _builder.BuildSub(result, right);
-            }
-            else if (op.GetText() == "OR")
-            {
-                result = _builder.BuildOr(result, right);
-            }
-            else
-            {
-                throw new NotSupportedException($"Operator {op} is not supported");
-            }
+            return resultTypeData;
         }
 
-        return result;
+        throw new NotSupportedException("String concatenation is not supported yet");
     }
 
-    public override LLVMValueRef VisitTerm(BeblangParser.TermContext context)
+    public override ITypeData VisitTerm(BeblangParser.TermContext context)
     {
-        var result = context.factor(0).Accept(this);
+        var resultTypeData = context.factor(0).Accept(this)!;
         if (context.factor().Length == 1)
         {
-            return result;
+            return resultTypeData;
         }
-        
+
+        var resultValue = GetValue(resultTypeData);
         for (var i = 1; i < context.factor().Length; i++)
         {
-            var right = context.factor(i).Accept(this);
+            var rightValue = GetValue(context.factor(i).Accept(this)!);
             var op = context.termOp(i - 1);
             
             if (op.GetText() == "*")
             {
-                result = _builder.BuildMul(result, right);
+                resultValue = _builder.BuildMul(resultValue, rightValue);
             }
             else if (op.GetText() == "/")
             {
-                result = _builder.BuildSDiv(result, right);
+                resultValue = _builder.BuildSDiv(resultValue, rightValue);
             }
             else if (op.GetText() == "MOD")
             {
-                result = _builder.BuildSRem(result, right);
+                resultValue = _builder.BuildSRem(resultValue, rightValue);
             }
             else if (op.GetText() == "&")
             {
-                result = _builder.BuildAnd(result, right);
+                resultValue = _builder.BuildAnd(resultValue, rightValue);
             }
             else
             {
@@ -333,10 +368,10 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
             }
         }
 
-        return result;
+        return new ValueData(resultTypeData.ValueType, resultValue);
     }
 
-    public override LLVMValueRef VisitFactor(BeblangParser.FactorContext context)
+    public override ITypeData? VisitFactor(BeblangParser.FactorContext context)
     {
         if (context.literal() is not null)
         {
@@ -351,7 +386,7 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
                 throw new InvalidOperationException($"Variable '{variableName}' not defined.");
             }
 
-            return typeValue.Value;
+            return typeValue;
         }
         
         if (context.subprogramCall() is not null)
@@ -367,104 +402,143 @@ public class BeblangIRGenerationVisitor : BeblangBaseVisitor<LLVMValueRef>
         throw new NotSupportedException($"Factor {context.GetText()} is not supported");
     }
 
-    public override LLVMValueRef VisitSubprogramCall(BeblangParser.SubprogramCallContext context)
+    public override ITypeData? VisitSubprogramCall(BeblangParser.SubprogramCallContext context)
     {
         var subprogramName = context.designator().IDENTIFIER().GetText();
         var subprogramInfo = _annotationTable.GetSymbol<SubprogramInfo>(context);
-        if (!TryGetBuiltInSubprogram(subprogramInfo, out var subprogram))
-        {
-            if (!_variableTable.IsDefined(subprogramName, out var function))
-            {
-                throw new InvalidOperationException($"Subprogram '{subprogramName}' not defined.");
-            }
-
-            subprogram = function;
-        }
         var arguments = context.expressionList()?.expression()
-            .Select(expressionContext => expressionContext.Accept(this))
+            .Select(expressionContext => expressionContext.Accept(this)!)
+            .Select(argument =>
+            {
+                TryGetValueIfPointer(argument, out var value);
+                return value;
+            })
             .ToArray() ?? Array.Empty<LLVMValueRef>();
+
+        if (TryInvokeBuiltInSubprogram(subprogramInfo, arguments, out var result))
+        {
+            return result;
+        }
         
-        return _builder.BuildCall2(subprogram.Type, subprogram.Value, arguments);
+        if (!_variableTable.IsDefined(subprogramName, out var typeData) || typeData is not FunctionData functionData)
+        {
+            throw new InvalidOperationException($"Subprogram '{subprogramName}' not defined.");
+        }
+
+        var returnValue = _builder.BuildCall2(functionData.ValueType, functionData.Reference, arguments);
+        if (subprogramInfo.ReturnType == DataType.Void)
+        {
+            return default;
+        }
+        
+        if (returnValue.TypeOf.Kind == LLVMTypeKind.LLVMPointerTypeKind)
+        {
+            return new PointerData(functionData.ValueType, returnValue, IsValuePointer: false);
+        }
+        
+        return new ValueData(functionData.ValueType, returnValue);
     }
 
-    private bool TryGetBuiltInSubprogram(SubprogramInfo subprogramInfo, [NotNullWhen(true)] out TypeValue? subprogram)
+    private bool TryInvokeBuiltInSubprogram(SubprogramInfo subprogramInfo, LLVMValueRef[] arguments, out ITypeData? result)
     {
-        if (subprogramInfo.Name == "PrintLine")
+        if (subprogramInfo == BuiltInSymbols.PrintString)
         {
-            subprogram = _externalBindings.printf;
+            var printfArguments = new[] { _predefinedValues.PrintfString, arguments[0] };
+            _builder.BuildCall2(_predefinedValues.Printf.ValueType, _predefinedValues.Printf.Reference, printfArguments);
+            result = default;
             return true;
         }
-
-        subprogram = default;
+        
+        if (subprogramInfo == BuiltInSymbols.PrintInteger)
+        {
+            var printfArguments = new[] { _predefinedValues.PrintfInteger, arguments[0] };
+            _builder.BuildCall2(_predefinedValues.Printf.ValueType, _predefinedValues.Printf.Reference, printfArguments);
+            result = default;
+            return true;
+        }
+        
+        if (subprogramInfo == BuiltInSymbols.PrintReal)
+        {
+            var printfArguments = new[] { _predefinedValues.PrintfReal, arguments[0] };
+            _builder.BuildCall2(_predefinedValues.Printf.ValueType, _predefinedValues.Printf.Reference, printfArguments);
+            result = default;
+            return true;
+        }
+        
+        result = default;
         return false;
     }
 
-    public override LLVMValueRef VisitLiteral(BeblangParser.LiteralContext context)
+    public override ITypeData VisitLiteral(BeblangParser.LiteralContext context)
     {
         if (context.INTEGER_LITERAL() is not null)
         {
             var value = int.Parse(context.INTEGER_LITERAL().GetText(), CultureInfo.InvariantCulture);
-            return LLVMValueRef.CreateConstInt(_module.Context.Int32Type, (ulong)value);
+            return new ValueData(LLVMTypeRef.Int32, LLVMValueRef.CreateConstInt(LLVMTypeRef.Int32, (ulong)value));
         }
         
         if (context.REAL_LITERAL() is not null)
         {
             var value = double.Parse(context.REAL_LITERAL().GetText(), CultureInfo.InvariantCulture);
-            return LLVMValueRef.CreateConstReal(_module.Context.DoubleType, value);
+            return new ValueData(LLVMTypeRef.Double, LLVMValueRef.CreateConstReal(LLVMTypeRef.Double, value));
         }
 
         if (context.STRING_LITERAL() is not null)
         {
-            var str = context.STRING_LITERAL().GetText().Trim('"') + "\0"; // Ensure null-termination
-            return _builder.BuildGlobalStringPtr(str);
+            var str = Regex.Unescape(context.STRING_LITERAL().GetText().Trim('"')); // unescape to real escape sequences
+            if (_stringLiterals.TryGetValue(str, out var stringLiteral))
+            {
+                return stringLiteral;
+            }
+            
+            stringLiteral = new PointerData(LLVMTypeRef.Int8, _module.CreateGlobalString(str), IsValuePointer: false);
+            _stringLiterals[str] = stringLiteral;
+            return stringLiteral;
         }
         
         throw new NotSupportedException($"Literal {context.GetText()} is not supported");
     }
-
-    private LLVMTypeRef ToLLVMType(DataType variableDataType)
-    {
-        if (variableDataType == DataType.Integer)
-        {
-            return LLVMTypeRef.Int32;
-        }
-        
-        if (variableDataType == DataType.Real)
-        {
-            return LLVMTypeRef.Double;
-        }
-        
-        if (variableDataType == DataType.String)
-        {
-            return LLVMTypeRef.CreatePointer(LLVMTypeRef.Int8, 0);
-        }
-
-        if (variableDataType == DataType.Void)
-        {
-            return LLVMTypeRef.Void;
-        }
-        
-        throw new NotSupportedException($"Type {variableDataType} is not supported");
-    }
     
-    private LLVMValueRef GetDefaultValue(DataType variableDataType)
+    private bool TryGetValueIfPointer(ITypeData typeData, out LLVMValueRef value)
     {
-        var llvmType = ToLLVMType(variableDataType);
-        if (variableDataType == DataType.Integer)
+        if (typeData is ValueData valueData)
         {
-            return LLVMValueRef.CreateConstInt(llvmType, 0);
+            value = valueData.Value;
+            return true;
+        }
+
+        if (typeData is PointerData pointerData)
+        {
+            if (pointerData.IsValuePointer)
+            {
+                value = _builder.BuildLoad2(typeData.ValueType, pointerData.Pointer);
+                return true;
+            }
+
+            value = pointerData.Pointer;
+            return false;
+        }
+
+        throw new InvalidOperationException("TypeValue is not a value nor a pointer");
+    }
+
+    private LLVMValueRef GetValue(ITypeData typeData)
+    {
+        if (TryGetValueIfPointer(typeData, out var value))
+        {
+            return value;
         }
         
-        if (variableDataType == DataType.Real)
+        throw new InvalidOperationException("TypeValue is not a value");
+    }
+
+    private static LLVMValueRef GetPointer(ITypeData typeData)
+    {
+        if (typeData is not PointerData pointerData)
         {
-            return LLVMValueRef.CreateConstReal(llvmType, 0);
+            throw new InvalidOperationException("TypeValue is not a pointer");
         }
-        
-        if (variableDataType == DataType.String)
-        {
-            return LLVMValueRef.CreateConstNull(llvmType);
-        }
-        
-        throw new NotSupportedException($"Type {variableDataType} is not supported");
+
+        return pointerData.Pointer;
     }
 }
