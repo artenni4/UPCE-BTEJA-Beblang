@@ -26,6 +26,7 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
     {
         var moduleInfo = _annotationTable.GetSymbol<ModuleInfo>(context);
         _module = LLVMModuleRef.CreateWithName(moduleInfo.Name);
+        _module.Target = LLVMTargetRef.DefaultTriple;
         _predefinedValues = new PredefinedValues(_module);
         _builder = _module.Context.CreateBuilder();
         context.moduleStatements().Accept(this);
