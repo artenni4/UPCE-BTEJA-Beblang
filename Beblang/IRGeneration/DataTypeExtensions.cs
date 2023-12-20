@@ -17,6 +17,19 @@ public static class DataTypeExtensions
             return LLVMValueRef.CreateConstReal(llvmType, 0);
         }
         
+        if (variableDataType.IsArray(out var arrayElementType))
+        {
+            var llvmElementType = arrayElementType.OfType.ToLlvmType();
+            var elementDefaultValue = arrayElementType.OfType.GetDefaultValue();
+    
+            // Generate a list of default values for each element in the array
+            var elements = Enumerable.Repeat(elementDefaultValue, arrayElementType.Size).ToArray();
+
+            // Create a constant array with these elements
+            var llvmArray = LLVMValueRef.CreateConstArray(llvmElementType, elements);
+            return llvmArray;
+        }
+        
         if (variableDataType == DataType.String)
         {
             return LLVMValueRef.CreateConstNull(llvmType);
@@ -40,6 +53,12 @@ public static class DataTypeExtensions
         if (variableDataType == DataType.String)
         {
             return LLVMTypeRef.CreatePointer(LLVMTypeRef.Int8, 0);
+        }
+        
+        if (variableDataType.IsArray(out var arrayElementType))
+        {
+            var llvmElementType = arrayElementType.OfType.ToLlvmType();
+            return LLVMTypeRef.CreateArray(llvmElementType, (uint)arrayElementType.Size);
         }
 
         if (variableDataType == DataType.Void)

@@ -3,6 +3,14 @@ MODULE RealNumbers;
 VAR
   num1, num2: REAL;
   sum, difference, product, quotient: REAL;
+
+PROCEDURE PrintRealWithLabel(label: STRING, value: REAL)
+BEGIN
+  PrintString(label);
+  PrintReal(value);
+  PrintString("\n");
+END;
+  
 BEGIN
   num1 := 5.5;
   num2 := 2.2;
@@ -12,9 +20,9 @@ BEGIN
   product := num1 * num2;
   quotient := num1 / num2;
   
-  PrintLine("Sum: " + REAL_TO_STRING(sum));
-  PrintLine("Difference: " + REAL_TO_STRING(difference));
-  PrintLine("Product: " + REAL_TO_STRING(product));
-  PrintLine("Quotient: " + REAL_TO_STRING(quotient));
+  PrintRealWithLabel("Sum: ", sum);
+  PrintRealWithLabel("Difference: ", difference);
+  PrintRealWithLabel("Product: ", product);
+  PrintRealWithLabel("Quotient: ", quotient);
   
 END.

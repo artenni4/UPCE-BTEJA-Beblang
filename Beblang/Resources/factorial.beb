@@ -17,6 +17,6 @@ BEGIN
 END;
 
 BEGIN
-  res := CalcFactorial(10);
-  PrintLine(INTEGER_TO_STRING(res));
+  res := CalcFactorial(6);
+  PrintInteger(res);
 END.

@@ -14,7 +14,6 @@ public class SymbolTable
     
     public bool TryDefine(ISymbolInfo symbolInfo, [NotNullWhen(false)] out SemanticError? error)
     {
-        Debug.WriteLine($"Defining {symbolInfo.Name}, at scope {_scopes.Count}");
         var currentScope = _scopes.Peek();
         if (currentScope.TryGetValue(symbolInfo.Name, out var existingSymbolInfo))
         {

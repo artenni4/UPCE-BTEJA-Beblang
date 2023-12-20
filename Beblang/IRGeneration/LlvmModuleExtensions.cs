@@ -22,7 +22,7 @@ public static class LlvmModuleExtensions
         globalStr.HasUnnamedAddr = true;;
 
         // Obtain a pointer to the first element of the array
-        var zero = LLVMValueRef.CreateConstInt(LLVMTypeRef.Int32, 0, false);
+        var zero = LLVMValueRef.CreateConstInt(LLVMTypeRef.Int32, 0);
         var strPtr = LLVMValueRef.CreateConstInBoundsGEP2(strArray.TypeOf, globalStr, new [] { zero, zero });
 
         return strPtr;

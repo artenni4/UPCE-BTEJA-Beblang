@@ -54,7 +54,7 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
         
         _variableTable.EnterScope();
         context.moduleBody.Accept(this);
-        _builder.BuildRetVoid();
+        EnsureVoidReturn(mainFunction);
         _variableTable.ExitScope();
         
         return default;
@@ -95,8 +95,24 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
         
         context.variableDeclarationBlock()?.Accept(this);
         context.subprogramBody().Accept(this);
+        EnsureVoidReturn(functionData.Reference);
         _variableTable.ExitScope();
         return default;
+    }
+
+    private void EnsureVoidReturn(LLVMValueRef function)
+    {
+        // Check if function's return type is void
+        if (function.TypeOf.ReturnType.Kind != LLVMTypeKind.LLVMVoidTypeKind)
+        {
+            return;
+        }
+        
+        if (_builder.InsertBlock.LastInstruction.InstructionOpcode != LLVMOpcode.LLVMRet)
+        {
+            // Add a return void instruction
+            _builder.BuildRetVoid();
+        }
     }
 
     public override ITypeData? VisitSubprogramDeclaration(BeblangParser.SubprogramDeclarationContext context)
@@ -148,27 +164,54 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
         var endBlock = currentFunction.AppendBasicBlock("end");
 
         // condition
+        _builder.BuildBr(conditionBlock);
         _builder.PositionAtEnd(conditionBlock);
         var condition = GetValue(context.expression().Accept(this)!);
         _builder.BuildCondBr(condition, ifBlock, elseBlock);
         
         // if
         _builder.PositionAtEnd(ifBlock);
-        context.statement(0).Accept(this);
-        _builder.BuildBr(endBlock);
+        foreach (var statementContext in context.statement())
+        {
+            statementContext.Accept(this);
+        }
+        if (_builder.InsertBlock.LastInstruction.InstructionOpcode != LLVMOpcode.LLVMRet)
+        {
+            _builder.BuildBr(elseIfBlocks.Any() ? elseIfBlocks.First() : endBlock);
+        }
         
         // else if
         for (var i = 0; i < context.elseIfStatement().Length; i++)
         {
             _builder.PositionAtEnd(elseIfBlocks[i]);
-            var elseIfCondition = GetValue(context.elseIfStatement(i).expression().Accept(this)!);
-            _builder.BuildCondBr(elseIfCondition, ifBlock, i == context.elseIfStatement().Length - 1 ? elseBlock : elseIfBlocks[i + 1]);
+            var elseIfStatement = context.elseIfStatement(i);
+            var elseIfCondition = GetValue(elseIfStatement.expression().Accept(this)!);
+            foreach (var statementContext in elseIfStatement.statement())
+            {
+                statementContext.Accept(this);
+            }
+
+            if (_builder.InsertBlock.LastInstruction.InstructionOpcode != LLVMOpcode.LLVMRet)
+            {
+                _builder.BuildCondBr(elseIfCondition, ifBlock, i == context.elseIfStatement().Length - 1 ? elseBlock : elseIfBlocks[i + 1]);
+            }
         }
         
         // else
         _builder.PositionAtEnd(elseBlock);
-        context.statement().Last().Accept(this);
-        _builder.BuildBr(endBlock);
+        var elseStatement = context.elseStatement();
+        if (elseStatement is not null)
+        {
+            foreach (var statementContext in elseStatement.statement())
+            {
+                statementContext.Accept(this);
+            }
+        }
+        
+        if (_builder.InsertBlock.LastInstruction.InstructionOpcode != LLVMOpcode.LLVMRet)
+        {
+            _builder.BuildBr(endBlock);
+        }
         
         // end
         _builder.PositionAtEnd(endBlock);
@@ -214,20 +257,15 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
             var returnValue = GetValue(returnTypeData);
             _builder.BuildRet(returnValue);
         }
-
+        
         return default;
     }
 
     public override ITypeData? VisitAssignment(BeblangParser.AssignmentContext context)
     {
-        var variableName = context.designator().IDENTIFIER().GetText();
-        if (!_variableTable.IsDefined(variableName, out var variable))
-        {
-            throw new InvalidOperationException($"Variable '{variableName}' not defined.");
-        }
-
+        var variableName = GetPointer(context.designator().Accept(this)!);
         var value = GetValue(context.expression().Accept(this)!);
-        _builder.BuildStore(value, GetPointer(variable));
+        _builder.BuildStore(value, variableName);
         
         return default;
     }
@@ -284,56 +322,76 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
 
     public override ITypeData VisitSimpleExpression(BeblangParser.SimpleExpressionContext context)
     {
+        var dataType = _annotationTable.GetType(context);
         var resultTypeData = context.term(0).Accept(this)!;
-        if (context.unaryOp() is not null || context.binaryOp().Any(b => b.GetText() != "+"))
-        {
-            var resultValue = GetValue(resultTypeData);
-            if (context.unaryOp() is not null && context.unaryOp().GetText() == "-")
-            {
-                resultValue = _builder.BuildNeg(resultValue);
-            }
-            
-            if (context.term().Length == 1)
-            {
-                return new ValueData(resultTypeData.ValueType, resultValue);
-            }
-            
-            for (var i = 1; i < context.term().Length; i++)
-            {
-                var rightValue = GetValue(context.term(i).Accept(this)!);
-                var op = context.binaryOp(i - 1);
-                
-                if (op.GetText() == "+")
-                {
-                    resultValue = _builder.BuildAdd(resultValue, rightValue);
-                }
-                else if (op.GetText() == "-")
-                {
-                    resultValue = _builder.BuildSub(resultValue, rightValue);
-                }
-                else if (op.GetText() == "OR")
-                {
-                    resultValue = _builder.BuildOr(resultValue, rightValue);
-                }
-                else
-                {
-                    throw new NotSupportedException($"Operator {op} is not supported");
-                }
-            }
-
-            return new ValueData(resultTypeData.ValueType, resultValue);
-        }
-        
+        var unaryOp = context.unaryOp()?.GetText();
         if (context.term().Length == 1)
         {
+            if (unaryOp == "-")
+            {
+                if (dataType == DataType.Integer)
+                {
+                    return new ValueData(resultTypeData.ValueType, _builder.BuildNeg(GetValue(resultTypeData)));
+                }
+                if (dataType == DataType.Real)
+                {
+                    return new ValueData(resultTypeData.ValueType, _builder.BuildFNeg(GetValue(resultTypeData)));
+                }
+                
+                throw new NotSupportedException($"Data type {dataType} does not support unary minus");
+            }
             return resultTypeData;
         }
+        
+        var resultValue = GetValue(resultTypeData);
+        if (context.unaryOp() is not null && context.unaryOp().GetText() == "-")
+        {
+            resultValue = _builder.BuildNeg(resultValue);
+        }
+        
+        
+        for (var i = 1; i < context.term().Length; i++)
+        {
+            var rightValue = GetValue(context.term(i).Accept(this)!);
+            var op = context.binaryOp(i - 1).GetText();
+            if (dataType == DataType.Integer)
+            {
+                resultValue = op switch
+                {
+                    "+" => _builder.BuildAdd(resultValue, rightValue),
+                    "-" => _builder.BuildSub(resultValue, rightValue),
+                    _ => throw new NotSupportedException($"Operator {op} is not supported")
+                };
+            }
+            else if (dataType == DataType.Real)
+            {
+                resultValue = op switch
+                {
+                    "+" => _builder.BuildFAdd(resultValue, rightValue),
+                    "-" => _builder.BuildFSub(resultValue, rightValue),
+                    _ => throw new NotSupportedException($"Operator {op} is not supported")
+                };
+            }
+            else if (dataType == DataType.Boolean)
+            {
+                resultValue = op switch
+                {
+                    "OR" => _builder.BuildOr(resultValue, rightValue),
+                    _ => throw new NotSupportedException($"Operator {op} is not supported")
+                };
+            }
+            else
+            {
+                throw new NotSupportedException($"Data type {dataType} does not support binary operations");
+            }
+        }
 
-        throw new NotSupportedException("String concatenation is not supported yet");
+        return new ValueData(resultTypeData.ValueType, resultValue);
     }
 
     public override ITypeData VisitTerm(BeblangParser.TermContext context)
     {
+        var dataType = _annotationTable.GetType(context);
         var resultTypeData = context.factor(0).Accept(this)!;
         if (context.factor().Length == 1)
         {
@@ -344,27 +402,38 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
         for (var i = 1; i < context.factor().Length; i++)
         {
             var rightValue = GetValue(context.factor(i).Accept(this)!);
-            var op = context.termOp(i - 1);
+            var op = context.termOp(i - 1).GetText();
             
-            if (op.GetText() == "*")
+            if (dataType == DataType.Integer)
             {
-                resultValue = _builder.BuildMul(resultValue, rightValue);
+                resultValue = op switch
+                {
+                    "*" => _builder.BuildMul(resultValue, rightValue),
+                    "/" => _builder.BuildSDiv(resultValue, rightValue),
+                    "MOD" => _builder.BuildSRem(resultValue, rightValue),
+                    _ => throw new NotSupportedException($"Operator {op} is not supported")
+                };
             }
-            else if (op.GetText() == "/")
+            else if (dataType == DataType.Real)
             {
-                resultValue = _builder.BuildSDiv(resultValue, rightValue);
+                resultValue = op switch
+                {
+                    "*" => _builder.BuildFMul(resultValue, rightValue),
+                    "/" => _builder.BuildFDiv(resultValue, rightValue),
+                    _ => throw new NotSupportedException($"Operator {op} is not supported")
+                };
             }
-            else if (op.GetText() == "MOD")
+            else if (dataType == DataType.Boolean)
             {
-                resultValue = _builder.BuildSRem(resultValue, rightValue);
-            }
-            else if (op.GetText() == "&")
-            {
-                resultValue = _builder.BuildAnd(resultValue, rightValue);
+                resultValue = op switch
+                {
+                    "AND" => _builder.BuildAnd(resultValue, rightValue),
+                    _ => throw new NotSupportedException($"Operator {op} is not supported")
+                };
             }
             else
             {
-                throw new NotSupportedException($"Operator {op} is not supported");
+                throw new NotSupportedException($"Data type {dataType} does not support binary operations");
             }
         }
 
@@ -380,13 +449,7 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
         
         if (context.designator() is not null)
         {
-            var variableName = context.designator().IDENTIFIER().GetText();
-            if (!_variableTable.IsDefined(variableName, out var typeValue))
-            {
-                throw new InvalidOperationException($"Variable '{variableName}' not defined.");
-            }
-
-            return typeValue;
+            return context.designator().Accept(this);
         }
         
         if (context.subprogramCall() is not null)
@@ -402,6 +465,31 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
         throw new NotSupportedException($"Factor {context.GetText()} is not supported");
     }
 
+    public override ITypeData VisitDesignator(BeblangParser.DesignatorContext context)
+    {
+        var variableName = context.IDENTIFIER().GetText();
+        if (!_variableTable.IsDefined(variableName, out var typeValue))
+        {
+            throw new InvalidOperationException($"Variable '{variableName}' not defined.");
+        }
+        
+        foreach (var selectorContext in context.selector())
+        {
+            if (typeValue is not PointerData pointerData)
+            {
+                throw new InvalidOperationException($"Variable '{variableName}' is not a pointer.");
+            }
+
+            var index = GetValue(selectorContext.expression().Accept(this)!);
+            var zero = LLVMValueRef.CreateConstInt(LLVMTypeRef.Int32, 0);
+            var elementPointer = _builder.BuildGEP2(pointerData.ValueType, pointerData.Pointer, new [] { zero, index });
+            
+            typeValue = new PointerData(pointerData.ValueType.ElementType, elementPointer, IsValuePointer: true);
+        }
+
+        return typeValue;
+    }
+
     public override ITypeData? VisitSubprogramCall(BeblangParser.SubprogramCallContext context)
     {
         var subprogramName = context.designator().IDENTIFIER().GetText();
@@ -415,7 +503,7 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
             })
             .ToArray() ?? Array.Empty<LLVMValueRef>();
 
-        if (TryInvokeBuiltInSubprogram(subprogramInfo, arguments, out var result))
+        if (_predefinedValues.TryInvokeBuiltInSubprogram(_builder, subprogramInfo, arguments, out var result))
         {
             return result;
         }
@@ -437,36 +525,6 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
         }
         
         return new ValueData(functionData.ValueType, returnValue);
-    }
-
-    private bool TryInvokeBuiltInSubprogram(SubprogramInfo subprogramInfo, LLVMValueRef[] arguments, out ITypeData? result)
-    {
-        if (subprogramInfo == BuiltInSymbols.PrintString)
-        {
-            var printfArguments = new[] { _predefinedValues.PrintfString, arguments[0] };
-            _builder.BuildCall2(_predefinedValues.Printf.ValueType, _predefinedValues.Printf.Reference, printfArguments);
-            result = default;
-            return true;
-        }
-        
-        if (subprogramInfo == BuiltInSymbols.PrintInteger)
-        {
-            var printfArguments = new[] { _predefinedValues.PrintfInteger, arguments[0] };
-            _builder.BuildCall2(_predefinedValues.Printf.ValueType, _predefinedValues.Printf.Reference, printfArguments);
-            result = default;
-            return true;
-        }
-        
-        if (subprogramInfo == BuiltInSymbols.PrintReal)
-        {
-            var printfArguments = new[] { _predefinedValues.PrintfReal, arguments[0] };
-            _builder.BuildCall2(_predefinedValues.Printf.ValueType, _predefinedValues.Printf.Reference, printfArguments);
-            result = default;
-            return true;
-        }
-        
-        result = default;
-        return false;
     }
 
     public override ITypeData VisitLiteral(BeblangParser.LiteralContext context)

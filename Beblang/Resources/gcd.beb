@@ -19,5 +19,5 @@ END;
 
 BEGIN
   res := CalcGcd(252, 105);
-  PrintLine(INTEGER_TO_STRING(res));
+  PrintInteger(res);
 END.

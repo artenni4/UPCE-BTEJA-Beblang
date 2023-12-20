@@ -2,7 +2,6 @@ MODULE Test;
 
 VAR a, b: INTEGER;
     c, d, e: STRING;
-    f: ARRAY 10 OF ARRAY 10 OF REAL;
     g: ARRAY 10 OF INTEGER;
 
 PROCEDURE RetArray() : ARRAY 10 OF INTEGER;
@@ -34,8 +33,6 @@ BEGIN
   CalcGcd(1, 2, 3.0, 4.0);
 
   a := (1 + 2) * 3 + 4 / 5 - 6;
-  f[1][2] := 1.0;
-  f[2][3] := INTEGER_TO_REAL(a);
   g := RetArray();
-  f[3][4] := INTEGER_TO_REAL(g[1]);
+  PrintInteger(a);
 END.

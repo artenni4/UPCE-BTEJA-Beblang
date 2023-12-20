@@ -7,11 +7,12 @@ Trace.Listeners.Add(new ConsoleTraceListener());
 var testPrograms = new[]
 {
     "Resources/simple.beb",
-    // "Resources/test.beb",
-    // "Resources/factorial.beb",
-    // "Resources/gcd.beb",
-    // "Resources/real_numbers.beb",
-    // "Resources/strings.beb"
+    "Resources/test.beb",
+    "Resources/arrays.beb",
+    "Resources/factorial.beb",
+    "Resources/gcd.beb",
+    "Resources/real_numbers.beb",
+    //"Resources/strings.beb"
 };
 
 foreach (var testProgram in testPrograms)

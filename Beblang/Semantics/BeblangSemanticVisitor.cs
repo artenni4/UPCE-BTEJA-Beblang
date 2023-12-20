@@ -89,6 +89,7 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
         {
             return AddError(error);
         }
+        AnnotationTable.AnnotateSymbols(context, subprogramInfo);
 
         return null;
     }
@@ -326,6 +327,12 @@ public class BeblangSemanticVisitor : BeblangBaseVisitor<Result<DataType, Semant
 
     public override Result<DataType, SemanticError>? VisitTerm(BeblangParser.TermContext context)
     {
+        var firstResult = context.factor(0).Accept(this);
+        if (firstResult is not null && firstResult.IsOk(out var dataType))
+        {
+            AnnotationTable.AnnotateType(context, dataType);
+        }
+        
         if (context.factor().Length == 1)
         {
             return context.factor(0).Accept(this);
