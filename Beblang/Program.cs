@@ -32,6 +32,11 @@ internal class Program
 
             Console.WriteLine();
         }
+        
+#if !DEBUG
+        Console.WriteLine("Press any key to exit...");
+        Console.ReadKey();
+#endif
     }
     
     static bool RunCompiler(string sourcePath)
