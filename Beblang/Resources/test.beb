@@ -2,37 +2,43 @@ MODULE Test;
 
 VAR a, b: INTEGER;
     c, d, e: STRING;
-    g: ARRAY 10 OF INTEGER;
-
-PROCEDURE RetArray() : ARRAY 10 OF INTEGER;
-
-PROCEDURE CalcGcd(p_a, p_b: INTEGER, p_a1, p_b2: REAL) : INTEGER
-VAR
-  tmp: INTEGER;
+    
+PROCEDURE PrintLabeledInteger(label: STRING, i: INTEGER)
 BEGIN
-  WHILE b # 0
-  DO
-    tmp := b;
-    b := a MOD b;
-    a := tmp;
+  PrintString(label);
+  PrintInteger(i);
+  PrintString("\n");
+END;
+
+PROCEDURE TestExpressions()
+BEGIN
+  IF a = b THEN
+    PrintString("a = b");
+  ELSE
+    PrintString("a != b");
   END;
+  PrintString("\n");
   
-  RetArray();
-  
-  RETURN a;
+  IF c = d THEN
+    PrintString("c = d");
+  ELSIF c = e THEN
+    PrintString("c = e");
+  ELSE
+    PrintString("c != d");
+  END;
+  PrintString("\n");
 END;
 
-PROCEDURE RetArray() : ARRAY 10 OF INTEGER
-VAR
-  a: ARRAY 10 OF INTEGER;
 BEGIN
-    RETURN a;
-END;
-
-BEGIN
-  CalcGcd(1, 2, 3.0, 4.0);
-
   a := (1 + 2) * 3 + 4 / 5 - 6;
-  g := RetArray();
-  PrintInteger(a);
+  b := 10;
+  
+  c := "Hello";
+  d := "World";
+  e := "Hello";
+  
+  PrintLabeledInteger("a = ", a);
+  PrintLabeledInteger("b = ", b);
+  
+  TestExpressions();
 END.

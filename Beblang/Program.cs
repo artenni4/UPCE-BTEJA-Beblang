@@ -8,20 +8,22 @@ if (args.Length > 0)
 {
     foreach (var arg in args)
     {
-        RunCompiler(arg);
+        if (!RunCompiler(arg))
+        {
+            return;
+        }
     }
     return;
 }
 
 var testPrograms = new[]
 {
+    "Resources/test.beb",
     //"Resources/simple.beb",
-    //"Resources/test.beb",
     //"Resources/arrays.beb",
-    "Resources/factorial.beb",
+    //"Resources/factorial.beb",
     //"Resources/gcd.beb",
     //"Resources/real_numbers.beb",
-    //"Resources/strings.beb"
 };
 
 foreach (var testProgram in testPrograms)
@@ -29,7 +31,7 @@ foreach (var testProgram in testPrograms)
     RunCompiler(testProgram);
 }
 
-static void RunCompiler(string sourcePath)
+static bool RunCompiler(string sourcePath)
 {
     Console.WriteLine($"Running compiler for {sourcePath}");
 
@@ -47,24 +49,28 @@ static void RunCompiler(string sourcePath)
     {
         Console.WriteLine("\n\nErrors encountered:");
         PrintErrors(beblangSemanticVisitor.Errors);
-        return;
+        return false;
     }
     
     var irGenerationVisitor = new BeblangIrGenerationVisitor(beblangSemanticVisitor.AnnotationTable);
+    
+#if DEBUG
     irGenerationVisitor.Visit(startContext);
+    irGenerationVisitor.Module.Dump();
+#else
+    try
+    {
+        irGenerationVisitor.Visit(startContext);
+    }
+    catch (Exception e)
+    {
+        Console.WriteLine("\n\nException encountered:\n" + e.StackTrace);
+        return false;
+    }
+#endif
 
-    // try
-    // {
-    //     irGenerationVisitor.Visit(startContext);
-    // }
-    // catch (Exception e)
-    // {
-    //     Console.WriteLine("\n\nException encountered:\n" + e.StackTrace);
-    //     throw;
-    // }
     var llFile = sourcePath + ".ll";
     irGenerationVisitor.Module.PrintToFile(llFile);
-    irGenerationVisitor.Module.Dump();
     
     var llcStartInfo = new ProcessStartInfo
     {
@@ -76,17 +82,21 @@ static void RunCompiler(string sourcePath)
     };
 
     using var llcProcess = Process.Start(llcStartInfo);
-    if (llcProcess != null)
+    if (llcProcess == null)
     {
-        llcProcess.WaitForExit();
-
-        // Handle output and errors
-        var llcOutput = llcProcess.StandardOutput.ReadToEnd();
-        var llcError = llcProcess.StandardError.ReadToEnd();
-
-        Console.WriteLine(llcOutput);
-        Console.WriteLine(llcError);
+        Console.WriteLine("Failed to start clang");
+        return false;
     }
+    llcProcess.WaitForExit();
+
+    // Handle output and errors
+    var llcOutput = llcProcess.StandardOutput.ReadToEnd();
+    var llcError = llcProcess.StandardError.ReadToEnd();
+
+    Console.WriteLine(llcOutput);
+    Console.WriteLine(llcError);
+
+    return true;
 }
 
 static void PrintErrors(IEnumerable<SemanticError> errors)

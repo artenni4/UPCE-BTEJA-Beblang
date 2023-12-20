@@ -159,7 +159,7 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
         // handle if, multiple else if and else
         var conditionBlock = currentFunction.AppendBasicBlock("ifCondition");
         var ifBlock = currentFunction.AppendBasicBlock("if");
-        var elseIfBlocks = context.elseIfStatement().Select(_ => currentFunction.AppendBasicBlock("elseIf")).ToArray();
+        var elseIfBlocks = context.elseIfStatement().Select(_ => (currentFunction.AppendBasicBlock("elseIfCondition"), currentFunction.AppendBasicBlock("elseIf"))).ToArray();
         var elseBlock = currentFunction.AppendBasicBlock("else");
         var endBlock = currentFunction.AppendBasicBlock("end");
 
@@ -167,7 +167,7 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
         _builder.BuildBr(conditionBlock);
         _builder.PositionAtEnd(conditionBlock);
         var condition = GetValue(context.expression().Accept(this)!);
-        _builder.BuildCondBr(condition, ifBlock, elseBlock);
+        _builder.BuildCondBr(condition, ifBlock, elseIfBlocks.Any() ? elseIfBlocks.First().Item1 : elseBlock);
         
         // if
         _builder.PositionAtEnd(ifBlock);
@@ -177,23 +177,28 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
         }
         if (_builder.InsertBlock.LastInstruction.InstructionOpcode != LLVMOpcode.LLVMRet)
         {
-            _builder.BuildBr(elseIfBlocks.Any() ? elseIfBlocks.First() : endBlock);
+            _builder.BuildBr(endBlock);
         }
         
-        // else if
+        // else ifs
         for (var i = 0; i < context.elseIfStatement().Length; i++)
         {
-            _builder.PositionAtEnd(elseIfBlocks[i]);
+            // condition
+            _builder.PositionAtEnd(elseIfBlocks[i].Item1);
             var elseIfStatement = context.elseIfStatement(i);
             var elseIfCondition = GetValue(elseIfStatement.expression().Accept(this)!);
+            _builder.BuildCondBr(elseIfCondition, elseIfBlocks[i].Item2, i == context.elseIfStatement().Length - 1 ? elseBlock : elseIfBlocks[i + 1].Item1);
+            
+            _builder.PositionAtEnd(elseIfBlocks[i].Item2);
             foreach (var statementContext in elseIfStatement.statement())
             {
                 statementContext.Accept(this);
             }
 
+            // else if body
             if (_builder.InsertBlock.LastInstruction.InstructionOpcode != LLVMOpcode.LLVMRet)
             {
-                _builder.BuildCondBr(elseIfCondition, ifBlock, i == context.elseIfStatement().Length - 1 ? elseBlock : elseIfBlocks[i + 1]);
+                _builder.BuildBr(endBlock);
             }
         }
         
@@ -264,7 +269,7 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
     public override ITypeData? VisitAssignment(BeblangParser.AssignmentContext context)
     {
         var variableName = GetPointer(context.designator().Accept(this)!);
-        var value = GetValue(context.expression().Accept(this)!);
+        TryGetValueIfPointer(context.expression().Accept(this)!, out var value);
         _builder.BuildStore(value, variableName);
         
         return default;
@@ -308,6 +313,16 @@ public class BeblangIrGenerationVisitor : BeblangBaseVisitor<ITypeData?>
                 "<=" => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOLE, leftValue, rightValue),
                 ">"  => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOGT, leftValue, rightValue),
                 ">=" => _builder.BuildFCmp(LLVMRealPredicate.LLVMRealOGE, leftValue, rightValue),
+                _ => throw new NotSupportedException($"Operator {op} is not supported")
+            };
+        }
+
+        if (dataType == DataType.String)
+        {
+            resultValue = op switch
+            {
+                "="  => _builder.BuildICmp(LLVMIntPredicate.LLVMIntEQ, leftValue, rightValue),
+                "#"  => _builder.BuildICmp(LLVMIntPredicate.LLVMIntEQ, leftValue, rightValue),
                 _ => throw new NotSupportedException($"Operator {op} is not supported")
             };
         }
