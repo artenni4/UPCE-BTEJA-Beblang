@@ -4,10 +4,11 @@ namespace Beblang.IRGeneration;
 
 public class PredefinedValues
 {
-    private readonly LLVMValueRef _printfString;
-    private readonly LLVMValueRef _printfReal;
-    private readonly LLVMValueRef _printfInteger;
+    private readonly LLVMValueRef _formatString;
+    private readonly LLVMValueRef _formatReal;
+    private readonly LLVMValueRef _formatInteger;
     private readonly FunctionData _printf;
+    private readonly FunctionData _scanf;
     private readonly FunctionData _exit;
 
     public PredefinedValues(LLVMModuleRef module)
@@ -15,19 +16,22 @@ public class PredefinedValues
         var printfType = LLVMTypeRef.CreateFunction(LLVMTypeRef.Int32, new[] { LLVMTypeRef.CreatePointer(LLVMTypeRef.Int8, 0) }, true);
         _printf = new FunctionData(printfType, module.AddFunction("printf", printfType));
         
+        var scanfType = LLVMTypeRef.CreateFunction(LLVMTypeRef.Int32, new[] { LLVMTypeRef.CreatePointer(LLVMTypeRef.Int8, 0) }, true);
+        _scanf = new FunctionData(scanfType, module.AddFunction("scanf", scanfType));
+        
         var exitType = LLVMTypeRef.CreateFunction(LLVMTypeRef.Void, new[] { LLVMTypeRef.Int32 });
         _exit = new FunctionData(exitType, module.AddFunction("exit", exitType));
 
-        _printfString = module.CreateGlobalString("%s");
-        _printfReal = module.CreateGlobalString("%f");
-        _printfInteger = module.CreateGlobalString("%d");
+        _formatString = module.CreateGlobalString("%s");
+        _formatReal = module.CreateGlobalString("%f");
+        _formatInteger = module.CreateGlobalString("%d");
     }
     
     public bool TryInvokeBuiltInSubprogram(LLVMBuilderRef builder, SubprogramInfo subprogramInfo, LLVMValueRef[] arguments, out ITypeData? result)
     {
         if (subprogramInfo == BuiltInSymbols.PrintString)
         {
-            var printfArguments = new[] { _printfString, arguments[0] };
+            var printfArguments = new[] { _formatString, arguments[0] };
             builder.BuildCall2(_printf.ValueType, _printf.Reference, printfArguments);
             result = default;
             return true;
@@ -35,7 +39,7 @@ public class PredefinedValues
         
         if (subprogramInfo == BuiltInSymbols.PrintInteger)
         {
-            var printfArguments = new[] { _printfInteger, arguments[0] };
+            var printfArguments = new[] { _formatInteger, arguments[0] };
             builder.BuildCall2(_printf.ValueType, _printf.Reference, printfArguments);
             result = default;
             return true;
@@ -43,9 +47,27 @@ public class PredefinedValues
         
         if (subprogramInfo == BuiltInSymbols.PrintReal)
         {
-            var printfArguments = new[] { _printfReal, arguments[0] };
+            var printfArguments = new[] { _formatReal, arguments[0] };
             builder.BuildCall2(_printf.ValueType, _printf.Reference, printfArguments);
             result = default;
+            return true;
+        }
+
+        if (subprogramInfo == BuiltInSymbols.ReadInteger)
+        {
+            var variable = builder.BuildAlloca(LLVMTypeRef.Int32);
+            var scanfArguments = new[] { _formatInteger, variable };
+            builder.BuildCall2(_scanf.ValueType, _scanf.Reference, scanfArguments);
+            result = new PointerData(LLVMTypeRef.Int32, variable, IsValuePointer: true);
+            return true;
+        }
+        
+        if (subprogramInfo == BuiltInSymbols.ReadReal)
+        {
+            var variable = builder.BuildAlloca(LLVMTypeRef.Double);
+            var scanfArguments = new[] { _formatReal, variable };
+            builder.BuildCall2(_scanf.ValueType, _scanf.Reference, scanfArguments);
+            result = new PointerData(LLVMTypeRef.Double, variable, IsValuePointer: true);
             return true;
         }
 

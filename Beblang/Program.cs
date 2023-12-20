@@ -18,9 +18,9 @@ var testPrograms = new[]
     //"Resources/simple.beb",
     //"Resources/test.beb",
     //"Resources/arrays.beb",
-    //"Resources/factorial.beb",
+    "Resources/factorial.beb",
     //"Resources/gcd.beb",
-    "Resources/real_numbers.beb",
+    //"Resources/real_numbers.beb",
     //"Resources/strings.beb"
 };
 
@@ -51,23 +51,25 @@ static void RunCompiler(string sourcePath)
     }
     
     var irGenerationVisitor = new BeblangIrGenerationVisitor(beblangSemanticVisitor.AnnotationTable);
-    try
-    {
-        irGenerationVisitor.Visit(startContext);
-    }
-    catch (Exception e)
-    {
-        Console.WriteLine("\n\nException encountered:\n" + e.StackTrace);
-        throw;
-    }
+    irGenerationVisitor.Visit(startContext);
+
+    // try
+    // {
+    //     irGenerationVisitor.Visit(startContext);
+    // }
+    // catch (Exception e)
+    // {
+    //     Console.WriteLine("\n\nException encountered:\n" + e.StackTrace);
+    //     throw;
+    // }
     var llFile = sourcePath + ".ll";
     irGenerationVisitor.Module.PrintToFile(llFile);
-    //irGenerationVisitor.Module.Dump();
+    irGenerationVisitor.Module.Dump();
     
     var llcStartInfo = new ProcessStartInfo
     {
         FileName = "clang",
-        Arguments = $"{llFile} -o {sourcePath}.exe",
+        Arguments = $"{llFile} -llegacy_stdio_definitions -o {sourcePath}.exe",
         UseShellExecute = false,
         RedirectStandardOutput = true,
         RedirectStandardError = true

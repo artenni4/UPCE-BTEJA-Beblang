@@ -1,7 +1,7 @@
 MODULE Factorial;
 
 VAR
-  res: INTEGER;
+  input, res: INTEGER;
 
 PROCEDURE CalcFactorial(n: INTEGER) : INTEGER
 BEGIN
@@ -17,6 +17,9 @@ BEGIN
 END;
 
 BEGIN
-  res := CalcFactorial(6);
+  PrintString("Enter a number: ");
+  input := ReadInteger();
+  res := CalcFactorial(input);
+  PrintString("Factorial = ");
   PrintInteger(res);
 END.
