@@ -10,7 +10,7 @@ BEGIN
   PrintReal(value);
   PrintString("\n");
 END;
-  
+
 BEGIN
   num1 := 5.5;
   num2 := 2.2;

@@ -4,22 +4,36 @@ using Beblang.Semantics;
 
 Trace.Listeners.Add(new ConsoleTraceListener());
 
+if (args.Length > 0)
+{
+    foreach (var arg in args)
+    {
+        RunCompiler(arg);
+    }
+    return;
+}
+
 var testPrograms = new[]
 {
-    "Resources/simple.beb",
-    "Resources/test.beb",
-    "Resources/arrays.beb",
-    "Resources/factorial.beb",
-    "Resources/gcd.beb",
+    //"Resources/simple.beb",
+    //"Resources/test.beb",
+    //"Resources/arrays.beb",
+    //"Resources/factorial.beb",
+    //"Resources/gcd.beb",
     "Resources/real_numbers.beb",
     //"Resources/strings.beb"
 };
 
 foreach (var testProgram in testPrograms)
 {
-    Console.WriteLine($"Running compiler for {testProgram}");
+    RunCompiler(testProgram);
+}
 
-    var inputStream = new AntlrFileStream(testProgram);
+static void RunCompiler(string sourcePath)
+{
+    Console.WriteLine($"Running compiler for {sourcePath}");
+
+    var inputStream = new AntlrFileStream(sourcePath);
 
     var lexer = new BeblangLexer(inputStream);
     var commonTokens = new CommonTokenStream(lexer);
@@ -37,15 +51,23 @@ foreach (var testProgram in testPrograms)
     }
     
     var irGenerationVisitor = new BeblangIrGenerationVisitor(beblangSemanticVisitor.AnnotationTable);
-    irGenerationVisitor.Visit(startContext);
-    var llFile = testProgram + ".ll";
+    try
+    {
+        irGenerationVisitor.Visit(startContext);
+    }
+    catch (Exception e)
+    {
+        Console.WriteLine("\n\nException encountered:\n" + e.StackTrace);
+        throw;
+    }
+    var llFile = sourcePath + ".ll";
     irGenerationVisitor.Module.PrintToFile(llFile);
-    irGenerationVisitor.Module.Dump();
+    //irGenerationVisitor.Module.Dump();
     
     var llcStartInfo = new ProcessStartInfo
     {
         FileName = "clang",
-        Arguments = $"{llFile} -o {testProgram}.exe",
+        Arguments = $"{llFile} -o {sourcePath}.exe",
         UseShellExecute = false,
         RedirectStandardOutput = true,
         RedirectStandardError = true
