@@ -29,6 +29,8 @@ internal class Program
             {
                 return;
             }
+
+            Console.WriteLine();
         }
     }
     
@@ -103,6 +105,8 @@ internal class Program
             Console.WriteLine("Errors: \n" + llcError);
             return false;
         }
+
+        Console.WriteLine($"Output file: {sourcePath}.exe");
         return true;
     }
     
